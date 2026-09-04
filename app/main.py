@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from .crypto import (
@@ -32,6 +32,132 @@ def health():
     return {
         "status": "ok",
         "service": "flop-proof-api",
+    }
+
+
+
+@app.get("/proofs")
+def list_proofs(
+    limit: int = 20,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """List recent proofs for the operations dashboard."""
+    if limit < 1 or limit > 100:
+        raise HTTPException(400, "limit must be between 1 and 100")
+
+    query = select(Proof).order_by(Proof.created_at.desc()).limit(limit)
+
+    if status is not None:
+        allowed_statuses = {"pending", "active", "completed", "failed"}
+        if status not in allowed_statuses:
+            raise HTTPException(400, "Invalid proof status")
+        query = (
+            select(Proof)
+            .where(Proof.status == status)
+            .order_by(Proof.created_at.desc())
+            .limit(limit)
+        )
+
+    proofs = db.execute(query).scalars().all()
+
+    items = []
+    for proof in proofs:
+        event_count = db.execute(
+            select(ProofEvent).where(ProofEvent.proof_id == proof.proof_id)
+        ).scalars().all()
+
+        items.append(
+            {
+                "proof_id": proof.proof_id,
+                "request_id": proof.request_id,
+                "version": proof.version,
+                "status": proof.status,
+                "created_at": proof.created_at,
+                "updated_at": proof.updated_at,
+                "events": len(event_count),
+            }
+        )
+
+    total = db.execute(select(func.count(Proof.id))).scalar_one()
+
+    status_rows = db.execute(
+        select(Proof.status, func.count(Proof.id))
+        .group_by(Proof.status)
+    ).all()
+
+    stats = {
+        "total": total,
+        "pending": 0,
+        "active": 0,
+        "completed": 0,
+        "failed": 0,
+    }
+
+    for proof_status, count in status_rows:
+        if proof_status in stats:
+            stats[proof_status] = count
+
+    return {
+        "items": items,
+        "count": len(items),
+        "total": total,
+        "stats": stats,
+    }
+
+@app.get("/actors")
+def list_actors(
+    db: Session = Depends(get_db),
+):
+    """List actor identities and their proof activity."""
+    rows = db.execute(
+        select(ProofEvent.actor_did, ProofEvent.proof_id, ProofEvent.event_type)
+        .order_by(ProofEvent.created_at.desc())
+    ).all()
+
+    actors = {}
+
+    for actor_did, proof_id, event_type in rows:
+        if actor_did not in actors:
+            actors[actor_did] = {
+                "did": actor_did,
+                "proof_ids": set(),
+                "active": 0,
+                "completed": 0,
+                "failed": 0,
+            }
+
+        actor = actors[actor_did]
+        actor["proof_ids"].add(proof_id)
+
+    for actor in actors.values():
+        proof_ids = actor["proof_ids"]
+
+        statuses = db.execute(
+            select(Proof.status).where(Proof.proof_id.in_(proof_ids))
+        ).scalars().all()
+
+        actor["active"] = statuses.count("active")
+        actor["completed"] = statuses.count("completed")
+        actor["failed"] = statuses.count("failed")
+
+    items = []
+    for actor in actors.values():
+        items.append(
+            {
+                "did": actor["did"],
+                "proofs": len(actor["proof_ids"]),
+                "active": actor["active"],
+                "completed": actor["completed"],
+                "failed": actor["failed"],
+            }
+        )
+
+    items.sort(key=lambda item: item["proofs"], reverse=True)
+
+    return {
+        "items": items,
+        "count": len(items),
     }
 
 
