@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flop-proof-sdk"
+version = "0.1.0"
+description = "Python SDK for the FLOP Proof API"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28,<1",
+    "cryptography>=43,<48",
+    "base58>=2.1,<3",
+]
+
+[tool.setuptools.packages.find]
+include = ["flop_proof_sdk*"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "test_verifier.py",
+    "test_api_contract.py",
+    "test_client_errors.py",
+    "test_client_signed.py",
+    "test_lifecycle.py",
+    "test_idempotency.py",
+    "test_security_regression.py",
+]
