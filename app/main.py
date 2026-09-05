@@ -3,8 +3,9 @@ import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, Header
+from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from .database import Base, engine, get_db
 from .events import create_event
 from .models import Proof, ProofEvent
 from .schemas import EventCreate, ProofCreate
+from .rate_limit import RateLimiter
 
 load_dotenv()
 
@@ -32,6 +34,38 @@ app = FastAPI(
 
 
 API_KEY = os.getenv("FLOP_API_KEY")
+
+RATE_LIMIT_ENABLED = os.getenv("FLOP_RATE_LIMIT_ENABLED", "true").lower() == "true"
+RATE_LIMIT_MAX_REQUESTS = int(os.getenv("FLOP_RATE_LIMIT", "100"))
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("FLOP_RATE_WINDOW", "60"))
+
+rate_limiter = RateLimiter(
+    max_requests=RATE_LIMIT_MAX_REQUESTS,
+    window_seconds=RATE_LIMIT_WINDOW_SECONDS,
+)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if not RATE_LIMIT_ENABLED or request.url.path == "/health":
+        return await call_next(request)
+
+    api_key = request.headers.get("X-API-Key")
+    client_ip = request.client.host if request.client else "unknown"
+
+    # API key varsa onu, yoksa IP adresini limiter anahtarı olarak kullan.
+    rate_limit_key = f"api:{api_key}" if api_key else f"ip:{client_ip}"
+
+    allowed, retry_after = rate_limiter.check(rate_limit_key)
+
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Rate limit exceeded"},
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    return await call_next(request)
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)):
