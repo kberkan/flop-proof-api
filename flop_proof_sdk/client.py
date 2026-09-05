@@ -53,9 +53,15 @@ class FlopProofHTTPError(FlopProofError):
 
 
 class FlopProofClient:
-    def __init__(self, base_url: str, timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 10.0,
+        api_key: str | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.api_key = api_key
 
     def _request(
         self,
@@ -64,10 +70,16 @@ class FlopProofClient:
         **kwargs: Any,
     ) -> dict[str, Any]:
         try:
+            headers = dict(kwargs.pop("headers", {}) or {})
+
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+
             response = httpx.request(
                 method,
                 f"{self.base_url}{path}",
                 timeout=self.timeout,
+                headers=headers,
                 **kwargs,
             )
         except httpx.HTTPError as exc:

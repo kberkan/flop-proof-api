@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
+import os
 
 from app.crypto import (
     generate_test_keypair,
@@ -12,7 +13,7 @@ from app.crypto import (
 from app.main import app
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-dev-key-2026")})
 
 
 def make_signed_request(private_key, did, request_id, text="security test"):

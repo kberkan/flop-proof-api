@@ -3,6 +3,7 @@ import base64
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
+import os
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app.crypto import (
@@ -13,7 +14,7 @@ from app.crypto import (
 from app.main import app
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-dev-key-2026")})
 
 
 def make_keypair():

@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
+import os
 
 from app.main import app
 from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-dev-key-2026")})
 
 
 def make_request(private_key, did, request_id, text="idempotency test"):

@@ -1,8 +1,9 @@
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Header
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -27,6 +28,25 @@ app = FastAPI(
 )
 
 
+API_KEY = os.getenv("FLOP_API_KEY")
+
+
+def require_api_key(x_api_key: str | None = Header(default=None)):
+    if not API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="API authentication is not configured",
+        )
+
+    if x_api_key != API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key",
+        )
+
+    return True
+
+
 @app.get("/health")
 def health():
     return {
@@ -41,6 +61,7 @@ def list_proofs(
     limit: int = 20,
     status: str | None = None,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     """List recent proofs for the operations dashboard."""
     if limit < 1 or limit > 100:
@@ -118,6 +139,7 @@ def list_proofs(
 @app.get("/actors")
 def list_actors(
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     """List actor identities and their proof activity."""
     rows = db.execute(
@@ -175,6 +197,7 @@ def list_actors(
 def create_proof(
     request: ProofCreate,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     signed_request = request.request
 
@@ -323,6 +346,7 @@ def append_event(
     proof_id: str,
     event: EventCreate,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     proof = db.scalar(
         select(Proof).where(Proof.proof_id == proof_id)
@@ -405,6 +429,7 @@ def append_event(
 def get_proof(
     proof_id: str,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     proof = db.scalar(
         select(Proof).where(Proof.proof_id == proof_id)
@@ -451,6 +476,7 @@ def get_proof(
 def verify_proof(
     proof_id: str,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     from .verification_core import verify_proof_events
 

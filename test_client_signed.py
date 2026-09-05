@@ -1,12 +1,13 @@
 import uuid
 import hashlib
+import os
 
 from app.crypto import generate_test_keypair, public_key_to_test_did
 from client import FlopProofClient
 
 
 def test_signed_sdk_e2e():
-    client = FlopProofClient("http://127.0.0.1:8000")
+    client = FlopProofClient("http://127.0.0.1:8000", api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"))
 
     private_key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
