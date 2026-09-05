@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flop-proof-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python SDK for the FLOP Proof API"
 requires-python = ">=3.12"
 dependencies = [
