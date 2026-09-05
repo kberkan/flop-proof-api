@@ -43,7 +43,7 @@ GET /proofs/{proof_id}/verify
 
 Install the wheel:
 
-pip install flop_proof_sdk-0.1.0-py3-none-any.whl
+pip install flop_proof_sdk-0.2.0-py3-none-any.whl
 
 Basic usage:
 
@@ -73,10 +73,10 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: 34 passed
+Current regression status: 35 passed
 
 ## Package
 
-Version: 0.1.0
+Version: 0.2.0
 
 Build with: python -m build
