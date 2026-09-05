@@ -25,4 +25,5 @@ testpaths = [
     "test_lifecycle.py",
     "test_idempotency.py",
     "test_security_regression.py",
+    "test_rate_limit_http.py",
 ]
