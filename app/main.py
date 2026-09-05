@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -32,6 +33,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+    
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-API-Key", "Content-Type"],
+)
+
 
 API_KEY = os.getenv("FLOP_API_KEY")
 
@@ -43,6 +53,16 @@ rate_limiter = RateLimiter(
     max_requests=RATE_LIMIT_MAX_REQUESTS,
     window_seconds=RATE_LIMIT_WINDOW_SECONDS,
 )
+
+    
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
 
 
 @app.middleware("http")
