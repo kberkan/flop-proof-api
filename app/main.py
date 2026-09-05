@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Header
+from dotenv import load_dotenv
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -19,6 +20,8 @@ from .database import Base, engine, get_db
 from .events import create_event
 from .models import Proof, ProofEvent
 from .schemas import EventCreate, ProofCreate
+
+load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
