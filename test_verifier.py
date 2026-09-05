@@ -1,5 +1,7 @@
 import copy
 import json
+import os
+import subprocess
 
 from app.verifier import verify_proof_file, verify_proof_data
 
@@ -7,12 +9,26 @@ from app.verifier import verify_proof_file, verify_proof_data
 PROOF_FILE = "/tmp/flop-proof.json"
 
 
+def ensure_proof_file():
+    if os.path.exists(PROOF_FILE):
+        return
+
+    subprocess.run(
+        ["python", "test_client.py"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+
+
+
 def load_proof():
+    ensure_proof_file()
     with open(PROOF_FILE, encoding="utf-8") as f:
         return json.load(f)
 
 
 def test_valid_proof():
+    ensure_proof_file()
     result = verify_proof_file(PROOF_FILE)
 
     assert result["verdict"] == "valid"

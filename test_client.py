@@ -131,6 +131,9 @@ def main():
     assert proof["proof_id"] == proof_id
     assert len(proof["events"]) == 4
 
+    with open("/tmp/flop-proof.json", "w", encoding="utf-8") as f:
+        json.dump(proof, f, ensure_ascii=False, indent=2)
+
     print(f"   Events: {len(proof['events'])}")
 
     print("5. VERIFY")

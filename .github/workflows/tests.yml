@@ -28,5 +28,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Start API server
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/flop-uvicorn.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8000/health; then
+              break
+            fi
+            sleep 1
+          done
+
       - name: Run tests
         run: pytest -q
