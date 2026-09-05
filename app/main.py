@@ -61,12 +61,22 @@ def list_proofs(
 
     proofs = db.execute(query).scalars().all()
 
+    proof_ids = [proof.proof_id for proof in proofs]
+
+    event_counts = {}
+    if proof_ids:
+        event_rows = db.execute(
+            select(ProofEvent.proof_id, func.count(ProofEvent.id))
+            .where(ProofEvent.proof_id.in_(proof_ids))
+            .group_by(ProofEvent.proof_id)
+        ).all()
+        event_counts = {
+            proof_id: count
+            for proof_id, count in event_rows
+        }
+
     items = []
     for proof in proofs:
-        event_count = db.execute(
-            select(ProofEvent).where(ProofEvent.proof_id == proof.proof_id)
-        ).scalars().all()
-
         items.append(
             {
                 "proof_id": proof.proof_id,
@@ -75,7 +85,7 @@ def list_proofs(
                 "status": proof.status,
                 "created_at": proof.created_at,
                 "updated_at": proof.updated_at,
-                "events": len(event_count),
+                "events": event_counts.get(proof.proof_id, 0),
             }
         )
 
