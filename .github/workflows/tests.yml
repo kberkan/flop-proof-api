@@ -10,6 +10,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      FLOP_API_KEY: flop-test-key-2026
+      FLOP_RATE_LIMIT_ENABLED: "false"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
