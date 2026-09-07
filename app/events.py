@@ -17,6 +17,7 @@ def create_event(
     payload: dict,
     canonical: str | None = None,
     signature: str | None = None,
+    nonce: str = "",
 ) -> ProofEvent:
     payload_hash = sha256_json(payload)
 
@@ -65,6 +66,7 @@ def create_event(
         created_at=datetime.now(timezone.utc),
         sequence=sequence,
         previous_event_hash=previous_event_hash,
+        nonce=nonce,
     )
 
     db.add(event)

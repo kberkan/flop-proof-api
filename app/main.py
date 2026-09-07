@@ -448,6 +448,19 @@ def append_event(
             detail="Invalid event signature",
         )
 
+    existing_nonce = db.scalar(
+        select(ProofEvent).where(
+            ProofEvent.proof_id == proof_id,
+            ProofEvent.nonce == event.signature.nonce,
+        )
+    )
+
+    if existing_nonce is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="event nonce already used for this proof",
+        )
+
     created = create_event(
         db=db,
         proof_id=proof_id,
@@ -456,6 +469,7 @@ def append_event(
         payload=event.payload,
         canonical=event.signature.canonical,
         signature=event.signature.sig,
+        nonce=event.signature.nonce,
     )
 
     if proof.status == "pending":

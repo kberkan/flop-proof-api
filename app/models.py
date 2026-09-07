@@ -33,3 +33,4 @@ class ProofEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
     sequence: Mapped[int] = mapped_column(Integer)
     previous_event_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    nonce: Mapped[str] = mapped_column(String(255), index=True, default="")
