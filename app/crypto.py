@@ -783,3 +783,56 @@ def validator_attestation_matches_result(
             return False
 
     return True
+
+
+def verify_and_accept_validator_attestation_bundle_for_result(
+    attestations: list[ValidatorAttestation],
+    result: dict,
+    report_data: str,
+    registry: MockValidatorRegistry,
+    threshold: float | Fraction,
+    processed_tasks: ProcessedTasks,
+) -> bool:
+    """Atomically verify result binding, report_data, quorum and replay.
+
+    No task is marked as processed until every verification step succeeds.
+    Any result-binding exception fails closed.
+    """
+    if not attestations:
+        return False
+
+    # 1. Bind every validator attestation to the externally supplied result.
+    # Fail closed if the binding helper raises unexpectedly.
+    for attestation in attestations:
+        try:
+            if not validator_attestation_matches_result(
+                attestation=attestation,
+                result=result,
+            ):
+                return False
+        except Exception:
+            return False
+
+    # 2. Bind the attestation claims to TEE report_data.
+    if not verify_validator_attestation_report_data(
+        attestation=attestations[0],
+        report_data=report_data,
+    ):
+        return False
+
+    # 3. Verify the complete validator quorum and signatures.
+    if not verify_validator_attestation_quorum(
+        attestations=attestations,
+        registry=registry,
+        threshold=threshold,
+    ):
+        return False
+
+    # 4. Replay check happens only after all verification has succeeded.
+    task_hash = attestations[0].task_hash
+
+    if processed_tasks.is_processed(task_hash):
+        return False
+
+    # 5. The only state mutation is the final acceptance operation.
+    return processed_tasks.mark_processed(task_hash)

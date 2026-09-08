@@ -4041,3 +4041,310 @@ def test_validator_bundle_atomic_acceptance_replay_is_independent_of_binding():
     )
 
     assert processed_tasks.is_processed(task_hash)
+
+
+def _make_valid_result_bundle_for_atomic_acceptance():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("c1" * 32)
+    model_hash = bytes.fromhex("c2" * 32)
+    output_hash = bytes.fromhex("c3" * 32)
+    decode_policy_hash = bytes.fromhex("c4" * 32)
+    hardware_id_hash = bytes.fromhex("c5" * 32)
+
+    validators = [
+        sr25519.pair_from_seed(bytes([i]) * 32)
+        for i in (121, 122, 123)
+    ]
+
+    registry = MockValidatorRegistry(
+        [public_key for public_key, _ in validators]
+    )
+
+    attestations = []
+
+    for public_key, secret_key in validators[:2]:
+        signature = sign_validator_attestation(
+            (public_key, secret_key),
+            task_hash=task_hash,
+            gn_weight=1200,
+            latency_ms=1100,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                task_hash=task_hash,
+                gn_weight=1200,
+                latency_ms=1100,
+                model_hash=model_hash,
+                output_hash=output_hash,
+                decode_policy_hash=decode_policy_hash,
+                tee_type=1,
+                quote_verified=True,
+                event_log_verified=True,
+                hardware_id_hash=hardware_id_hash,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    result = {
+        "task_hash": task_hash.hex(),
+        "output_hash": output_hash.hex(),
+        "model_hash": model_hash.hex(),
+        "gn_weight": 1200,
+        "latency_ms": 1100,
+        "decode_policy_hash": decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(1200).to_bytes(8, "little"),
+        latency_ms=(1100).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    return attestations, result, report_data, registry, task_hash
+
+
+def test_atomic_validator_bundle_accepts_valid_result():
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    processed_tasks = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_bundle_rejects_result_binding_mismatch_without_credit():
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    result["output_hash"] = "ff" * 32
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_bundle_rejects_missing_result_field_without_credit():
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    del result["task_hash"]
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_bundle_rejects_report_data_without_credit():
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        _report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_bundle_rejects_failed_quorum_without_credit():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        _registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    # Only one of the two signers is active.
+    registry = MockValidatorRegistry([attestations[0].validator_id])
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_bundle_rejects_replay_without_second_credit():
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    processed_tasks = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_bundle_fails_closed_if_result_binding_raises(
+    monkeypatch,
+):
+    import app.crypto as crypto
+
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    def exploding_binding(*args, **kwargs):
+        raise RuntimeError("unexpected binding failure")
+
+    monkeypatch.setattr(
+        crypto,
+        "validator_attestation_matches_result",
+        exploding_binding,
+    )
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
