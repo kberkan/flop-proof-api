@@ -1,1 +1,2 @@
 fastapi>=0.115,<1\nuvicorn[standard]>=0.34,<1\nsqlalchemy>=2.0,<3\nhttpx>=0.28,<1\ncryptography>=43,<48\nbase58>=2.1,<3\npython-dotenv>=1.0,<2\npytest>=8,<9\n
+py-sr25519-bindings==0.2.4

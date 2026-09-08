@@ -559,13 +559,14 @@ def test_validator_attestation_signable_payload_uses_scale_little_endian():
 
 
 def test_validator_attestation_signature_round_trip():
+    import sr25519
     from app.crypto import (
-        generate_test_keypair,
         sign_validator_attestation,
         verify_validator_attestation_signature,
     )
 
-    signing_key, verify_key = generate_test_keypair()
+    seed = bytes(range(32))
+    public_key, private_key = sr25519.pair_from_seed(seed)
 
     kwargs = dict(
         task_hash=bytes.fromhex("11" * 32),
@@ -580,22 +581,27 @@ def test_validator_attestation_signature_round_trip():
         hardware_id_hash=bytes.fromhex("55" * 32),
     )
 
-    signature = sign_validator_attestation(signing_key, **kwargs)
+    signature = sign_validator_attestation(
+        (public_key, private_key),
+        **kwargs,
+    )
 
+    assert len(public_key) == 32
     assert len(signature) == 64
     assert verify_validator_attestation_signature(
-        verify_key, signature, **kwargs
+        public_key, signature, **kwargs
     )
 
 
 def test_validator_attestation_signature_rejects_tampering():
+    import sr25519
     from app.crypto import (
-        generate_test_keypair,
         sign_validator_attestation,
         verify_validator_attestation_signature,
     )
 
-    signing_key, verify_key = generate_test_keypair()
+    seed = bytes(range(32))
+    public_key, private_key = sr25519.pair_from_seed(seed)
 
     kwargs = dict(
         task_hash=bytes.fromhex("11" * 32),
@@ -610,11 +616,14 @@ def test_validator_attestation_signature_rejects_tampering():
         hardware_id_hash=bytes.fromhex("55" * 32),
     )
 
-    signature = sign_validator_attestation(signing_key, **kwargs)
+    signature = sign_validator_attestation(
+        (public_key, private_key),
+        **kwargs,
+    )
 
     tampered = dict(kwargs)
     tampered["latency_ms"] += 1
 
     assert not verify_validator_attestation_signature(
-        verify_key, signature, **tampered
+        public_key, signature, **tampered
     )

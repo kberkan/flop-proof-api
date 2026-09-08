@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import base58
+import sr25519
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
@@ -268,7 +269,7 @@ def encode_validator_attestation_signable_payload(
     )
 
 def sign_validator_attestation(
-    signing_key: Ed25519PrivateKey,
+    keypair: tuple[bytes, bytes],
     task_hash: bytes,
     gn_weight: int,
     latency_ms: int,
@@ -280,7 +281,6 @@ def sign_validator_attestation(
     event_log_verified: bool,
     hardware_id_hash: bytes,
 ) -> bytes:
-    """Sign the SCALE-encoded ValidatorAttestation signable subset."""
     payload = encode_validator_attestation_signable_payload(
         task_hash=task_hash,
         gn_weight=gn_weight,
@@ -293,11 +293,11 @@ def sign_validator_attestation(
         event_log_verified=event_log_verified,
         hardware_id_hash=hardware_id_hash,
     )
-    return signing_key.sign(payload)
+    return sr25519.sign(keypair, payload)
 
 
 def verify_validator_attestation_signature(
-    verify_key: Ed25519PublicKey,
+    public_key: bytes,
     signature: bytes,
     task_hash: bytes,
     gn_weight: int,
@@ -310,7 +310,6 @@ def verify_validator_attestation_signature(
     event_log_verified: bool,
     hardware_id_hash: bytes,
 ) -> bool:
-    """Verify a ValidatorAttestation signature over its SCALE payload."""
     payload = encode_validator_attestation_signable_payload(
         task_hash=task_hash,
         gn_weight=gn_weight,
@@ -325,10 +324,10 @@ def verify_validator_attestation_signature(
     )
 
     try:
-        verify_key.verify(signature, payload)
-        return True
+        return sr25519.verify(signature, payload, public_key)
     except Exception:
         return False
+
 
 def compute_report_data(
     task_hash: bytes,
