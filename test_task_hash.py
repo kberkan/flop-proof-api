@@ -771,3 +771,59 @@ def test_validator_attestation_rejects_invalid_fixed_width_fields():
         raise AssertionError(
             f"{field} must have the exact protocol length"
         )
+
+def test_validator_attestation_signable_payload_is_exactly_179_bytes():
+    from app.crypto import encode_validator_attestation_signable_payload
+
+    payload = encode_validator_attestation_signable_payload(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    assert len(payload) == 179
+
+def test_validator_attestation_signable_payload_uses_expected_field_order():
+    from app.crypto import encode_validator_attestation_signable_payload
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    payload = encode_validator_attestation_signable_payload(
+        task_hash=task_hash,
+        gn_weight=0x0102030405060708,
+        latency_ms=0x1112131415161718,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=0x07,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    expected = (
+        task_hash
+        + bytes.fromhex("0807060504030201")
+        + bytes.fromhex("1817161514131211")
+        + model_hash
+        + output_hash
+        + decode_policy_hash
+        + b"\x07"
+        + b"\x01"
+        + b"\x00"
+        + hardware_id_hash
+    )
+
+    assert payload == expected
+    assert len(payload) == 179
