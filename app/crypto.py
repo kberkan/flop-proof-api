@@ -648,3 +648,36 @@ def verify_validator_attestation_report_data(
         return False
 
     return report_data == expected_report_data
+
+
+def verify_and_accept_validator_attestation(
+    attestation: ValidatorAttestation,
+    report_data: str,
+    registry: MockValidatorRegistry,
+    threshold: float | Fraction,
+    processed_tasks: ProcessedTasks,
+) -> bool:
+    """Verify one validator attestation and accept its task exactly once."""
+    if processed_tasks.is_processed(attestation.task_hash):
+        return False
+
+    if not attestation.quote_verified:
+        return False
+
+    if not attestation.event_log_verified:
+        return False
+
+    if not verify_validator_attestation_report_data(
+        attestation=attestation,
+        report_data=report_data,
+    ):
+        return False
+
+    if not verify_validator_attestation_quorum(
+        attestations=[attestation],
+        registry=registry,
+        threshold=threshold,
+    ):
+        return False
+
+    return processed_tasks.mark_processed(attestation.task_hash)

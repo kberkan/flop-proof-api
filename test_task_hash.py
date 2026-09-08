@@ -2098,3 +2098,222 @@ def test_validator_attestation_report_data_rejects_wrong_output_hash():
         attestation=attestation,
         report_data=wrong_report_data,
     ) is False
+
+
+def test_proof_acceptance_requires_verified_quote_and_event_log():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([8]) * 32)
+    keypair = (validator_id, secret_key)
+
+    signature = sign_validator_attestation(
+        keypair=keypair,
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    registry = MockValidatorRegistry([validator_id])
+    processed = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation(
+        attestation=attestation,
+        report_data=report_data,
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    ) is True
+
+    assert processed.is_processed(task_hash) is True
+
+
+def test_proof_acceptance_rejects_unverified_quote():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([9]) * 32)
+    keypair = (validator_id, secret_key)
+
+    signature = sign_validator_attestation(
+        keypair=keypair,
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=False,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=False,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    registry = MockValidatorRegistry([validator_id])
+    processed = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation(
+        attestation=attestation,
+        report_data=report_data,
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    ) is False
+
+    assert processed.is_processed(task_hash) is False
+
+
+def test_proof_acceptance_rejects_unverified_event_log():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([10]) * 32)
+    keypair = (validator_id, secret_key)
+
+    signature = sign_validator_attestation(
+        keypair=keypair,
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    registry = MockValidatorRegistry([validator_id])
+    processed = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation(
+        attestation=attestation,
+        report_data=report_data,
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    ) is False
+
+    assert processed.is_processed(task_hash) is False
