@@ -2317,3 +2317,118 @@ def test_proof_acceptance_rejects_unverified_event_log():
     ) is False
 
     assert processed.is_processed(task_hash) is False
+
+
+def test_validator_attestation_full_scale_encoding_is_275_bytes():
+    from app.crypto import (
+        ValidatorAttestation,
+        encode_validator_attestation_scale,
+        sign_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([11]) * 32)
+    signature = sign_validator_attestation(
+        keypair=(validator_id, secret_key),
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    encoded = encode_validator_attestation_scale(attestation)
+
+    assert len(encoded) == 275
+
+
+def test_validator_attestation_full_scale_starts_with_signed_payload():
+    from app.crypto import (
+        ValidatorAttestation,
+        encode_validator_attestation_scale,
+        encode_validator_attestation_signable_payload,
+        sign_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([12]) * 32)
+    signature = sign_validator_attestation(
+        keypair=(validator_id, secret_key),
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    signed_payload = encode_validator_attestation_signable_payload(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    encoded = encode_validator_attestation_scale(attestation)
+
+    assert len(signed_payload) == 179
+    assert encoded[:179] == signed_payload
+    assert encoded[179:211] == validator_id
+    assert encoded[211:275] == signature

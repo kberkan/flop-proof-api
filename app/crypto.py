@@ -681,3 +681,29 @@ def verify_and_accept_validator_attestation(
         return False
 
     return processed_tasks.mark_processed(attestation.task_hash)
+
+
+def encode_validator_attestation_scale(
+    attestation: ValidatorAttestation,
+) -> bytes:
+    """Encode the complete ValidatorAttestation fixed-field SCALE payload."""
+    signed_payload = encode_validator_attestation_signable_payload(
+        task_hash=attestation.task_hash,
+        gn_weight=attestation.gn_weight,
+        latency_ms=attestation.latency_ms,
+        model_hash=attestation.model_hash,
+        output_hash=attestation.output_hash,
+        decode_policy_hash=attestation.decode_policy_hash,
+        tee_type=attestation.tee_type,
+        quote_verified=attestation.quote_verified,
+        event_log_verified=attestation.event_log_verified,
+        hardware_id_hash=attestation.hardware_id_hash,
+    )
+
+    if len(attestation.validator_id) != 32:
+        raise ValueError("validator_id must be exactly 32 bytes")
+
+    if len(attestation.signature) != 64:
+        raise ValueError("signature must be exactly 64 bytes")
+
+    return signed_payload + attestation.validator_id + attestation.signature
