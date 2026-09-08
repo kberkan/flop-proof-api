@@ -627,3 +627,74 @@ def test_validator_attestation_signature_rejects_tampering():
     assert not verify_validator_attestation_signature(
         public_key, signature, **tampered
     )
+
+
+def test_validator_attestation_validator_id_binds_signature():
+    import sr25519
+    from app.crypto import (
+        sign_validator_attestation,
+        verify_validator_attestation_signature,
+    )
+
+    validator_id, private_key = sr25519.pair_from_seed(bytes(range(32)))
+
+    kwargs = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    signature = sign_validator_attestation(
+        (validator_id, private_key),
+        **kwargs,
+    )
+
+    assert len(validator_id) == 32
+    assert len(signature) == 64
+    assert verify_validator_attestation_signature(
+        validator_id,
+        signature,
+        **kwargs,
+    )
+
+
+def test_validator_attestation_rejects_signature_from_different_validator():
+    import sr25519
+    from app.crypto import (
+        sign_validator_attestation,
+        verify_validator_attestation_signature,
+    )
+
+    validator_id_a, private_key_a = sr25519.pair_from_seed(bytes(range(32)))
+    validator_id_b, _ = sr25519.pair_from_seed(bytes(range(32, 64)))
+
+    kwargs = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    signature = sign_validator_attestation(
+        (validator_id_a, private_key_a),
+        **kwargs,
+    )
+
+    assert not verify_validator_attestation_signature(
+        validator_id_b,
+        signature,
+        **kwargs,
+    )
