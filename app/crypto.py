@@ -217,3 +217,41 @@ def verify_floop_signature(
         message,
         signature,
     )
+
+def compute_report_data(
+    task_hash: bytes,
+    gn_weight: bytes,
+    latency_ms: bytes,
+    model_hash: bytes,
+    output_hash: bytes,
+    decode_policy_hash: bytes,
+    tee_type: bytes,
+) -> str:
+    """Compute the FLOP report_data SHA-256 commitment.
+
+    Numeric/protocol fields are accepted in their caller-provided
+    canonical byte representation. This avoids inventing an encoding
+    rule where the current specification does not explicitly define one.
+    """
+    hash_fields = (
+        ("task_hash", task_hash),
+        ("model_hash", model_hash),
+        ("output_hash", output_hash),
+        ("decode_policy_hash", decode_policy_hash),
+    )
+
+    for name, value in hash_fields:
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
+    preimage = (
+        task_hash
+        + gn_weight
+        + latency_ms
+        + model_hash
+        + output_hash
+        + decode_policy_hash
+        + tee_type
+    )
+
+    return hashlib.sha256(preimage).hexdigest()

@@ -348,3 +348,57 @@ def test_report_data_is_sha256_commitment_not_task_hash():
         preimage,
         digest_size=32,
     ).hexdigest()
+
+def test_report_data_primitive_matches_sha256_binding():
+    import hashlib
+    from app.crypto import compute_report_data
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+
+    gn_weight = b"gn-weight"
+    latency_ms = b"latency"
+    tee_type = b"tee"
+
+    expected = hashlib.sha256(
+        task_hash
+        + gn_weight
+        + latency_ms
+        + model_hash
+        + output_hash
+        + decode_policy_hash
+        + tee_type
+    ).hexdigest()
+
+    assert compute_report_data(
+        task_hash,
+        gn_weight,
+        latency_ms,
+        model_hash,
+        output_hash,
+        decode_policy_hash,
+        tee_type,
+    ) == expected
+
+
+def test_report_data_rejects_invalid_hash_lengths():
+    from app.crypto import compute_report_data
+
+    valid = bytes.fromhex("11" * 32)
+
+    try:
+        compute_report_data(
+            b"short",
+            b"gn",
+            b"latency",
+            valid,
+            valid,
+            valid,
+            b"tee",
+        )
+    except ValueError as exc:
+        assert str(exc) == "task_hash must be exactly 32 bytes"
+    else:
+        raise AssertionError("expected invalid task_hash length to fail")
