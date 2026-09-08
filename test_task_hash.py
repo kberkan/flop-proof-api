@@ -165,3 +165,58 @@ def test_flop_result_metadata_output_hash_is_optional():
     }
 
     assert payload.get("output_hash") is None
+
+def test_flop_metadata_status_legacy_is_absent():
+    payload = {
+        "content": "model output",
+        "content_hash": "sha256:placeholder",
+    }
+
+    assert "task_hash" not in payload
+    assert "model_hash" not in payload
+    assert "gn_weight" not in payload
+    assert "latency_ms" not in payload
+    assert "decode_policy_hash" not in payload
+    assert "tee_type" not in payload
+
+
+def test_flop_metadata_status_partial_is_incomplete():
+    payload = {
+        "task_hash": "aa" * 32,
+        "model_hash": "11" * 32,
+        "latency_ms": 125,
+    }
+
+    required = {
+        "task_hash",
+        "model_hash",
+        "gn_weight",
+        "latency_ms",
+        "decode_policy_hash",
+        "tee_type",
+    }
+
+    assert set(payload) & required
+    assert not required.issubset(payload)
+
+
+def test_flop_metadata_status_complete_is_present():
+    payload = {
+        "task_hash": "aa" * 32,
+        "model_hash": "11" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": "test",
+    }
+
+    required = {
+        "task_hash",
+        "model_hash",
+        "gn_weight",
+        "latency_ms",
+        "decode_policy_hash",
+        "tee_type",
+    }
+
+    assert required.issubset(payload)
