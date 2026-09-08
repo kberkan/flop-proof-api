@@ -62,3 +62,15 @@ def test_task_hash_requires_32_byte_agent_and_hashes():
         raise AssertionError(
             f"{field} must be exactly 32 bytes"
         )
+
+
+def test_result_content_hash_changes_when_content_changes():
+    from app.crypto import sha256_bytes
+
+    original = "original result"
+    modified = "modified result"
+
+    original_hash = f"sha256:{sha256_bytes(original.encode('utf-8'))}"
+    modified_hash = f"sha256:{sha256_bytes(modified.encode('utf-8'))}"
+
+    assert original_hash != modified_hash
