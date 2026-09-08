@@ -698,3 +698,76 @@ def test_validator_attestation_rejects_signature_from_different_validator():
         signature,
         **kwargs,
     )
+
+def test_validator_attestation_requires_exact_field_shapes():
+    from app.crypto import ValidatorAttestation
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+        validator_id=bytes.fromhex("66" * 32),
+        signature=bytes.fromhex("77" * 64),
+    )
+
+    assert len(attestation.task_hash) == 32
+    assert len(attestation.model_hash) == 32
+    assert len(attestation.output_hash) == 32
+    assert len(attestation.decode_policy_hash) == 32
+    assert len(attestation.hardware_id_hash) == 32
+    assert len(attestation.validator_id) == 32
+    assert len(attestation.signature) == 64
+    assert attestation.gn_weight == 123456
+    assert attestation.latency_ms == 789
+    assert attestation.tee_type == 7
+    assert attestation.quote_verified is True
+    assert attestation.event_log_verified is True
+
+
+def test_validator_attestation_rejects_invalid_fixed_width_fields():
+    from app.crypto import ValidatorAttestation
+
+    valid = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+        validator_id=bytes.fromhex("66" * 32),
+        signature=bytes.fromhex("77" * 64),
+    )
+
+    invalid_cases = [
+        ("task_hash", b"\x11" * 31),
+        ("model_hash", b"\x22" * 31),
+        ("output_hash", b"\x33" * 31),
+        ("decode_policy_hash", b"\x44" * 31),
+        ("hardware_id_hash", b"\x55" * 31),
+        ("validator_id", b"\x66" * 31),
+        ("signature", b"\x77" * 63),
+    ]
+
+    for field, invalid in invalid_cases:
+        values = dict(valid)
+        values[field] = invalid
+
+        try:
+            ValidatorAttestation(**values)
+        except ValueError:
+            continue
+
+        raise AssertionError(
+            f"{field} must have the exact protocol length"
+        )

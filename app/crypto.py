@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from dataclasses import dataclass
 
 import json
 
@@ -13,6 +14,54 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 
 ED25519_PUB_MULTICODEC = bytes([0xED, 0x01])
+
+
+@dataclass(frozen=True)
+class ValidatorAttestation:
+    task_hash: bytes
+    gn_weight: int
+    latency_ms: int
+    model_hash: bytes
+    output_hash: bytes
+    decode_policy_hash: bytes
+    tee_type: int
+    quote_verified: bool
+    event_log_verified: bool
+    hardware_id_hash: bytes
+    validator_id: bytes
+    signature: bytes
+
+    def __post_init__(self) -> None:
+        hash_fields = (
+            ("task_hash", self.task_hash),
+            ("model_hash", self.model_hash),
+            ("output_hash", self.output_hash),
+            ("decode_policy_hash", self.decode_policy_hash),
+            ("hardware_id_hash", self.hardware_id_hash),
+            ("validator_id", self.validator_id),
+        )
+
+        for name, value in hash_fields:
+            if not isinstance(value, bytes) or len(value) != 32:
+                raise ValueError(f"{name} must be exactly 32 bytes")
+
+        if not isinstance(self.signature, bytes) or len(self.signature) != 64:
+            raise ValueError("signature must be exactly 64 bytes")
+
+        if not isinstance(self.gn_weight, int) or not 0 <= self.gn_weight <= 2**64 - 1:
+            raise ValueError("gn_weight must be a u64")
+
+        if not isinstance(self.latency_ms, int) or not 0 <= self.latency_ms <= 2**64 - 1:
+            raise ValueError("latency_ms must be a u64")
+
+        if not isinstance(self.tee_type, int) or not 0 <= self.tee_type <= 255:
+            raise ValueError("tee_type must be a u8")
+
+        if not isinstance(self.quote_verified, bool):
+            raise ValueError("quote_verified must be a bool")
+
+        if not isinstance(self.event_log_verified, bool):
+            raise ValueError("event_log_verified must be a bool")
 
 
 def compute_task_hash(
