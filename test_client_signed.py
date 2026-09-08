@@ -35,7 +35,7 @@ def test_signed_sdk_e2e():
             "task_id": "pytest-task",
             "delegated_to": did,
         },
-        nonce=nonce,
+        nonce=nonce + "-delegated",
     )
 
     result_content = "Pytest signed SDK result"
@@ -55,7 +55,7 @@ def test_signed_sdk_e2e():
             "content": result_content,
             "content_hash": result_hash,
         },
-        nonce=nonce,
+        nonce=nonce + "-result",
     )
 
     verification = client.verify_proof(proof_id)
