@@ -1,5 +1,6 @@
 import base64
 import hashlib
+
 import json
 
 import base58
@@ -11,6 +12,28 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 
 
 ED25519_PUB_MULTICODEC = bytes([0xED, 0x01])
+
+
+def compute_task_hash(
+    agent: bytes,
+    nonce: bytes,
+    model_hash: bytes,
+    payload_hash: bytes,
+    commit_hash: bytes,
+) -> str:
+    """Compute the draft FLOP task hash from its byte components."""
+    preimage = (
+        agent
+        + nonce
+        + model_hash
+        + payload_hash
+        + commit_hash
+    )
+
+    return hashlib.blake2b(
+        preimage,
+        digest_size=32,
+    ).hexdigest()
 
 
 def sha256_bytes(data: bytes) -> str:
