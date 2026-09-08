@@ -2758,3 +2758,310 @@ def test_validator_attestation_bundle_acceptance_is_replay_protected():
         threshold=2 / 3,
         processed_tasks=processed_tasks,
     )
+
+
+def _make_bundle_fixture(seed_values=(31, 32, 33)):
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        sign_validator_attestation,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("81" * 32)
+    model_hash = bytes.fromhex("82" * 32)
+    output_hash = bytes.fromhex("83" * 32)
+    decode_policy_hash = bytes.fromhex("84" * 32)
+    hardware_id_hash = bytes.fromhex("85" * 32)
+
+    validators = [
+        sr25519.pair_from_seed(bytes([i]) * 32)
+        for i in seed_values
+    ]
+
+    registry = MockValidatorRegistry(
+        [public_key for public_key, _ in validators]
+    )
+
+    attestations = []
+
+    for public_key, secret_key in validators[:2]:
+        signature = sign_validator_attestation(
+            (public_key, secret_key),
+            task_hash=task_hash,
+            gn_weight=100,
+            latency_ms=250,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                task_hash=task_hash,
+                gn_weight=100,
+                latency_ms=250,
+                model_hash=model_hash,
+                output_hash=output_hash,
+                decode_policy_hash=decode_policy_hash,
+                tee_type=1,
+                quote_verified=True,
+                event_log_verified=True,
+                hardware_id_hash=hardware_id_hash,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    return task_hash, registry, validators, attestations
+
+
+def test_validator_attestation_bundle_rejects_below_quorum():
+    from app.crypto import ProcessedTasks, verify_and_accept_validator_attestation_bundle
+
+    task_hash, registry, _, attestations = _make_bundle_fixture()
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=attestations[:1],
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_rejects_inactive_validator():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle,
+    )
+
+    task_hash, _, validators, attestations = _make_bundle_fixture()
+
+    registry = MockValidatorRegistry([validators[0][0], bytes.fromhex("99" * 32)])
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data="00" * 32,
+        registry=registry,
+        threshold=1 / 2,
+        processed_tasks=processed_tasks,
+    )
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_rejects_duplicate_validator():
+    from app.crypto import ProcessedTasks, verify_and_accept_validator_attestation_bundle
+
+    task_hash, registry, _, attestations = _make_bundle_fixture()
+    processed_tasks = ProcessedTasks()
+
+    duplicate_bundle = [attestations[0], attestations[0]]
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=duplicate_bundle,
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_rejects_modified_signature():
+    from app.crypto import (
+        ProcessedTasks,
+        ValidatorAttestation,
+        verify_and_accept_validator_attestation_bundle,
+    )
+
+    task_hash, registry, _, attestations = _make_bundle_fixture()
+    processed_tasks = ProcessedTasks()
+
+    modified = attestations[1]
+    bad_signature = bytes([modified.signature[0] ^ 1]) + modified.signature[1:]
+
+    modified = ValidatorAttestation(
+        task_hash=modified.task_hash,
+        gn_weight=modified.gn_weight,
+        latency_ms=modified.latency_ms,
+        model_hash=modified.model_hash,
+        output_hash=modified.output_hash,
+        decode_policy_hash=modified.decode_policy_hash,
+        tee_type=modified.tee_type,
+        quote_verified=modified.quote_verified,
+        event_log_verified=modified.event_log_verified,
+        hardware_id_hash=modified.hardware_id_hash,
+        validator_id=modified.validator_id,
+        signature=bad_signature,
+    )
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=[attestations[0], modified],
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_rejects_signed_field_mismatch():
+    from app.crypto import (
+        ProcessedTasks,
+        ValidatorAttestation,
+        verify_and_accept_validator_attestation_bundle,
+    )
+    import sr25519
+
+    task_hash, registry, validators, attestations = _make_bundle_fixture()
+    processed_tasks = ProcessedTasks()
+
+    public_key, secret_key = validators[1]
+
+    signature = sr25519.sign(
+        (public_key, secret_key),
+        b"invalid",
+    )
+
+    modified = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=999,
+        latency_ms=250,
+        model_hash=attestations[1].model_hash,
+        output_hash=attestations[1].output_hash,
+        decode_policy_hash=attestations[1].decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=attestations[1].hardware_id_hash,
+        validator_id=public_key,
+        signature=signature,
+    )
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=[attestations[0], modified],
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_rejects_output_hash_mismatch():
+    from app.crypto import (
+        ProcessedTasks,
+        ValidatorAttestation,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation_bundle,
+    )
+
+    task_hash, registry, validators, attestations = _make_bundle_fixture()
+
+    public_key, secret_key = validators[1]
+    wrong_output_hash = bytes.fromhex("aa" * 32)
+
+    signature = sign_validator_attestation(
+        (public_key, secret_key),
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=250,
+        model_hash=attestations[1].model_hash,
+        output_hash=wrong_output_hash,
+        decode_policy_hash=attestations[1].decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=attestations[1].hardware_id_hash,
+    )
+
+    modified = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=250,
+        model_hash=attestations[1].model_hash,
+        output_hash=wrong_output_hash,
+        decode_policy_hash=attestations[1].decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=attestations[1].hardware_id_hash,
+        validator_id=public_key,
+        signature=signature,
+    )
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=[attestations[0], modified],
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_does_not_mark_failed_verification():
+    from app.crypto import ProcessedTasks, verify_and_accept_validator_attestation_bundle
+
+    task_hash, registry, _, attestations = _make_bundle_fixture()
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data="ff" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_credits_task_only_once():
+    from app.crypto import (
+        ProcessedTasks,
+        compute_report_data,
+        verify_and_accept_validator_attestation_bundle,
+    )
+
+    task_hash, registry, _, attestations = _make_bundle_fixture()
+    processed_tasks = ProcessedTasks()
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(250).to_bytes(8, "little"),
+        model_hash=attestations[0].model_hash,
+        output_hash=attestations[0].output_hash,
+        decode_policy_hash=attestations[0].decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    assert verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert processed_tasks.is_processed(task_hash)
