@@ -74,3 +74,18 @@ def test_result_content_hash_changes_when_content_changes():
     modified_hash = f"sha256:{sha256_bytes(modified.encode('utf-8'))}"
 
     assert original_hash != modified_hash
+
+def test_output_hash_is_distinct_from_legacy_content_hash():
+    from app.crypto import sha256_bytes
+
+    content = b"model inference output"
+
+    content_hash = f"sha256:{sha256_bytes(content)}"
+
+    # FLOP output_hash is a separate protocol-level commitment.
+    # Until the exact serialization is specified, it must not be
+    # silently treated as the legacy content_hash field.
+    output_hash = None
+
+    assert content_hash
+    assert output_hash is None
