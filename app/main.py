@@ -1,7 +1,9 @@
+import base64
 import json
 import os
 import uuid
 from datetime import datetime, timezone
+from fractions import Fraction
 
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from dotenv import load_dotenv
@@ -12,14 +14,19 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from .crypto import (
+    MockValidatorRegistry,
+    ProcessedTasks,
+    ValidatorAttestation,
     hash_event_record,
     sha256_bytes,
     sha256_json,
     verify_canonical_signature,
     verify_floop_signature,
+    verify_and_accept_validator_attestation_bundle_for_result,
 )
 from .database import Base, engine, get_db
 from .events import create_event
+from .schemas import ValidatorAttestationAcceptRequest
 from .models import Proof, ProofEvent
 from .schemas import EventCreate, ProofCreate
 from .rate_limit import RateLimiter
@@ -102,6 +109,75 @@ def require_api_key(x_api_key: str | None = Header(default=None)):
         )
 
     return True
+
+
+LOCAL_VALIDATOR_IDS = tuple(
+    bytes.fromhex(value.strip())
+    for value in os.getenv("FLOP_LOCAL_VALIDATOR_IDS", "").split(",")
+    if value.strip()
+)
+
+validator_registry = MockValidatorRegistry(list(LOCAL_VALIDATOR_IDS))
+processed_validator_tasks = ProcessedTasks()
+VALIDATOR_ATTESTATION_THRESHOLD = Fraction(
+    os.getenv("FLOP_VALIDATOR_THRESHOLD", "2/3")
+)
+
+
+@app.post("/validator-attestations/accept")
+def accept_validator_attestations(
+    request: ValidatorAttestationAcceptRequest,
+    _: bool = Depends(require_api_key),
+):
+    """Local/test-only validator attestation acceptance boundary."""
+    try:
+        attestations = [
+            ValidatorAttestation(
+                task_hash=bytes.fromhex(attestation.task_hash),
+                gn_weight=attestation.gn_weight,
+                latency_ms=attestation.latency_ms,
+                model_hash=bytes.fromhex(attestation.model_hash),
+                output_hash=bytes.fromhex(attestation.output_hash),
+                decode_policy_hash=bytes.fromhex(attestation.decode_policy_hash),
+                tee_type=attestation.tee_type,
+                quote_verified=attestation.quote_verified,
+                event_log_verified=attestation.event_log_verified,
+                hardware_id_hash=bytes.fromhex(attestation.hardware_id_hash),
+                validator_id=bytes.fromhex(attestation.validator_id),
+                signature=base64.b64decode(
+                    attestation.signature + "=" * (-len(attestation.signature) % 4),
+                    altchars=b"-_",
+                    validate=True,
+                ),
+            )
+            for attestation in request.attestations
+        ]
+    except (ValueError, TypeError):
+        raise HTTPException(
+            422,
+            detail="Invalid validator attestation encoding",
+        ) from None
+
+    accepted = verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=request.result,
+        report_data=request.report_data,
+        registry=validator_registry,
+        threshold=VALIDATOR_ATTESTATION_THRESHOLD,
+        processed_tasks=processed_validator_tasks,
+    )
+
+    if not accepted:
+        raise HTTPException(
+            409,
+            detail="Validator attestation bundle rejected",
+        )
+
+    return {
+        "accepted": True,
+        "task_hash": attestations[0].task_hash.hex(),
+        "validators": len(attestations),
+    }
 
 
 @app.get("/health")
