@@ -2432,3 +2432,86 @@ def test_validator_attestation_full_scale_starts_with_signed_payload():
     assert encoded[:179] == signed_payload
     assert encoded[179:211] == validator_id
     assert encoded[211:275] == signature
+
+
+def test_validator_attestation_scale_preserves_u64_boundaries():
+    from app.crypto import (
+        ValidatorAttestation,
+        encode_validator_attestation_scale,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=0,
+        latency_ms=2**64 - 1,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=255,
+        quote_verified=False,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+        validator_id=bytes.fromhex("66" * 32),
+        signature=bytes.fromhex("77" * 64),
+    )
+
+    encoded = encode_validator_attestation_scale(attestation)
+
+    assert len(encoded) == 275
+    assert encoded[32:40] == (0).to_bytes(8, "little")
+    assert encoded[40:48] == (2**64 - 1).to_bytes(8, "little")
+    assert encoded[144] == 255
+    assert encoded[145] == 0
+    assert encoded[146] == 1
+    assert encoded[179:211] == bytes.fromhex("66" * 32)
+    assert encoded[211:275] == bytes.fromhex("77" * 64)
+
+
+def test_validator_attestation_scale_field_order_is_exact():
+    from app.crypto import (
+        ValidatorAttestation,
+        encode_validator_attestation_scale,
+    )
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+    validator_id = bytes.fromhex("66" * 32)
+    signature = bytes.fromhex("77" * 64)
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=0x0102030405060708,
+        latency_ms=0x1112131415161718,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=9,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    encoded = encode_validator_attestation_scale(attestation)
+
+    expected = (
+        task_hash
+        + (0x0102030405060708).to_bytes(8, "little")
+        + (0x1112131415161718).to_bytes(8, "little")
+        + model_hash
+        + output_hash
+        + decode_policy_hash
+        + bytes([9])
+        + bytes([1])
+        + bytes([0])
+        + hardware_id_hash
+        + validator_id
+        + signature
+    )
+
+    assert encoded == expected
+    assert len(encoded) == 275
