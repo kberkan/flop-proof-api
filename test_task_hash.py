@@ -402,3 +402,52 @@ def test_report_data_rejects_invalid_hash_lengths():
         assert str(exc) == "task_hash must be exactly 32 bytes"
     else:
         raise AssertionError("expected invalid task_hash length to fail")
+
+def test_validator_attestation_fields_are_distinct_from_result_metadata():
+    attestation = {
+        "task_hash": "11" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "model_hash": "22" * 32,
+        "output_hash": "33" * 32,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": 1,
+        "quote_verified": True,
+        "event_log_verified": True,
+        "hardware_id_hash": "55" * 32,
+        "validator_id": "66" * 32,
+        "signature": "test-signature",
+    }
+
+    assert len(bytes.fromhex(attestation["task_hash"])) == 32
+    assert len(bytes.fromhex(attestation["model_hash"])) == 32
+    assert len(bytes.fromhex(attestation["output_hash"])) == 32
+    assert len(bytes.fromhex(attestation["decode_policy_hash"])) == 32
+    assert len(bytes.fromhex(attestation["hardware_id_hash"])) == 32
+
+
+def test_validator_attestation_contains_quote_and_event_log_status():
+    attestation = {
+        "quote_verified": True,
+        "event_log_verified": True,
+    }
+
+    assert isinstance(attestation["quote_verified"], bool)
+    assert isinstance(attestation["event_log_verified"], bool)
+
+
+def test_validator_attestation_is_not_implied_by_flop_metadata():
+    payload = {
+        "task_hash": "11" * 32,
+        "model_hash": "22" * 32,
+        "output_hash": "33" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": 1,
+    }
+
+    assert "quote_verified" not in payload
+    assert "event_log_verified" not in payload
+    assert "validator_id" not in payload
+    assert "signature" not in payload
