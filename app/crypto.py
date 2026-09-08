@@ -707,3 +707,39 @@ def encode_validator_attestation_scale(
         raise ValueError("signature must be exactly 64 bytes")
 
     return signed_payload + attestation.validator_id + attestation.signature
+
+
+def verify_and_accept_validator_attestation_bundle(
+    attestations: list[ValidatorAttestation],
+    report_data: str,
+    registry: MockValidatorRegistry,
+    threshold: float | Fraction,
+    processed_tasks: ProcessedTasks,
+) -> bool:
+    """Verify and accept a validator attestation bundle exactly once.
+
+    The bundle must satisfy quorum, validator/signature checks, and
+    report_data binding before its task hash is marked as processed.
+    """
+    if not attestations:
+        return False
+
+    task_hash = attestations[0].task_hash
+
+    if processed_tasks.is_processed(task_hash):
+        return False
+
+    if not verify_validator_attestation_quorum(
+        attestations=attestations,
+        registry=registry,
+        threshold=threshold,
+    ):
+        return False
+
+    if not verify_validator_attestation_report_data(
+        attestation=attestations[0],
+        report_data=report_data,
+    ):
+        return False
+
+    return processed_tasks.mark_processed(task_hash)

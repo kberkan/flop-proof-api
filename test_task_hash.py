@@ -2515,3 +2515,246 @@ def test_validator_attestation_scale_field_order_is_exact():
 
     assert encoded == expected
     assert len(encoded) == 275
+
+def test_validator_attestation_bundle_acceptance_binds_report_data_and_quorum():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation_bundle,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validators = [
+        sr25519.pair_from_seed(bytes([i]) * 32)
+        for i in (1, 2, 3)
+    ]
+
+    registry = MockValidatorRegistry(
+        [public_key for public_key, _ in validators]
+    )
+
+    attestations = []
+
+    for public_key, secret_key in validators[:2]:
+        signature = sign_validator_attestation(
+            (public_key, secret_key),
+            task_hash=task_hash,
+            gn_weight=100,
+            latency_ms=250,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                task_hash=task_hash,
+                gn_weight=100,
+                latency_ms=250,
+                model_hash=model_hash,
+                output_hash=output_hash,
+                decode_policy_hash=decode_policy_hash,
+                tee_type=1,
+                quote_verified=True,
+                event_log_verified=True,
+                hardware_id_hash=hardware_id_hash,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(250).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    processed_tasks = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_acceptance_rejects_bad_report_data():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation_bundle,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("61" * 32)
+    model_hash = bytes.fromhex("62" * 32)
+    output_hash = bytes.fromhex("63" * 32)
+    decode_policy_hash = bytes.fromhex("64" * 32)
+    hardware_id_hash = bytes.fromhex("65" * 32)
+
+    validators = [
+        sr25519.pair_from_seed(bytes([i]) * 32)
+        for i in (11, 12, 13)
+    ]
+
+    registry = MockValidatorRegistry(
+        [public_key for public_key, _ in validators]
+    )
+
+    attestations = []
+
+    for public_key, secret_key in validators[:2]:
+        signature = sign_validator_attestation(
+            (public_key, secret_key),
+            task_hash=task_hash,
+            gn_weight=100,
+            latency_ms=250,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                task_hash=task_hash,
+                gn_weight=100,
+                latency_ms=250,
+                model_hash=model_hash,
+                output_hash=output_hash,
+                decode_policy_hash=decode_policy_hash,
+                tee_type=1,
+                quote_verified=True,
+                event_log_verified=True,
+                hardware_id_hash=hardware_id_hash,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    processed_tasks = ProcessedTasks()
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data="00" * 32,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_acceptance_is_replay_protected():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation_bundle,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("71" * 32)
+    model_hash = bytes.fromhex("72" * 32)
+    output_hash = bytes.fromhex("73" * 32)
+    decode_policy_hash = bytes.fromhex("74" * 32)
+    hardware_id_hash = bytes.fromhex("75" * 32)
+
+    validators = [
+        sr25519.pair_from_seed(bytes([i]) * 32)
+        for i in (21, 22, 23)
+    ]
+
+    registry = MockValidatorRegistry(
+        [public_key for public_key, _ in validators]
+    )
+
+    attestations = []
+
+    for public_key, secret_key in validators[:2]:
+        signature = sign_validator_attestation(
+            (public_key, secret_key),
+            task_hash=task_hash,
+            gn_weight=200,
+            latency_ms=300,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=2,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                task_hash=task_hash,
+                gn_weight=200,
+                latency_ms=300,
+                model_hash=model_hash,
+                output_hash=output_hash,
+                decode_policy_hash=decode_policy_hash,
+                tee_type=2,
+                quote_verified=True,
+                event_log_verified=True,
+                hardware_id_hash=hardware_id_hash,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(200).to_bytes(8, "little"),
+        latency_ms=(300).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(2).to_bytes(1, "little"),
+    )
+
+    processed_tasks = ProcessedTasks()
+
+    assert verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
+
+    assert not verify_and_accept_validator_attestation_bundle(
+        attestations=attestations,
+        report_data=report_data,
+        registry=registry,
+        threshold=2 / 3,
+        processed_tasks=processed_tasks,
+    )
