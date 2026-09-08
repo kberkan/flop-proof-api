@@ -1035,3 +1035,435 @@ def test_mock_validator_registry_returns_active_validator_ids():
         validator_a,
         validator_b,
     )
+
+def test_validator_attestation_quorum_rejects_three_of_five():
+    import sr25519
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        verify_validator_attestation_quorum,
+    )
+
+    seed_values = [bytes([i]) * 32 for i in range(1, 6)]
+    keypairs = [sr25519.pair_from_seed(seed) for seed in seed_values]
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs]
+    )
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    attestations = []
+
+    for public_key, private_key in keypairs[:3]:
+        signature = sr25519.sign(
+            (public_key, private_key),
+            __import__("app.crypto", fromlist=[
+                "encode_validator_attestation_signable_payload"
+            ]).encode_validator_attestation_signable_payload(**common),
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                **common,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+
+def test_validator_attestation_quorum_accepts_four_of_five():
+    import sr25519
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        verify_validator_attestation_quorum,
+    )
+
+    seed_values = [bytes([i]) * 32 for i in range(1, 6)]
+    keypairs = [sr25519.pair_from_seed(seed) for seed in seed_values]
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs]
+    )
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    from app.crypto import encode_validator_attestation_signable_payload
+
+    payload = encode_validator_attestation_signable_payload(**common)
+    attestations = []
+
+    for public_key, private_key in keypairs[:4]:
+        signature = sr25519.sign(
+            (public_key, private_key),
+            payload,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                **common,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    assert verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+def _build_validator_attestations_for_quorum_test(
+    count: int,
+    common: dict,
+):
+    import sr25519
+    from app.crypto import (
+        ValidatorAttestation,
+        encode_validator_attestation_signable_payload,
+    )
+
+    keypairs = [
+        sr25519.pair_from_seed(bytes([i]) * 32)
+        for i in range(1, 7)
+    ]
+
+    payload = encode_validator_attestation_signable_payload(**common)
+
+    attestations = []
+
+    for public_key, private_key in keypairs[:count]:
+        signature = sr25519.sign(
+            (public_key, private_key),
+            payload,
+        )
+
+        attestations.append(
+            ValidatorAttestation(
+                **common,
+                validator_id=public_key,
+                signature=signature,
+            )
+        )
+
+    return keypairs, attestations
+
+
+def test_validator_attestation_quorum_rejects_inactive_validator():
+    from app.crypto import (
+        MockValidatorRegistry,
+        verify_validator_attestation_quorum,
+    )
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    keypairs, attestations = _build_validator_attestations_for_quorum_test(
+        4,
+        common,
+    )
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs[:5]]
+    )
+
+    inactive_public, inactive_private = keypairs[5]
+    from app.crypto import ValidatorAttestation, encode_validator_attestation_signable_payload
+
+    signature = __import__("sr25519").sign(
+        (inactive_public, inactive_private),
+        encode_validator_attestation_signable_payload(**common),
+    )
+
+    attestations[-1] = ValidatorAttestation(
+        **common,
+        validator_id=inactive_public,
+        signature=signature,
+    )
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+
+def test_validator_attestation_quorum_rejects_duplicate_validator():
+    from app.crypto import (
+        MockValidatorRegistry,
+        verify_validator_attestation_quorum,
+    )
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    keypairs, attestations = _build_validator_attestations_for_quorum_test(
+        4,
+        common,
+    )
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs[:5]]
+    )
+
+    attestations[3] = attestations[0]
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+
+def test_validator_attestation_quorum_rejects_different_output_hash():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        encode_validator_attestation_signable_payload,
+        verify_validator_attestation_quorum,
+    )
+    import sr25519
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    keypairs, attestations = _build_validator_attestations_for_quorum_test(
+        4,
+        common,
+    )
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs[:5]]
+    )
+
+    different = dict(common)
+    different["output_hash"] = bytes.fromhex("66" * 32)
+
+    public_key, private_key = keypairs[3]
+    signature = sr25519.sign(
+        (public_key, private_key),
+        encode_validator_attestation_signable_payload(**different),
+    )
+
+    attestations[3] = ValidatorAttestation(
+        **different,
+        validator_id=public_key,
+        signature=signature,
+    )
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+
+def test_validator_attestation_quorum_rejects_modified_signature():
+    from app.crypto import (
+        MockValidatorRegistry,
+        verify_validator_attestation_quorum,
+    )
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    keypairs, attestations = _build_validator_attestations_for_quorum_test(
+        4,
+        common,
+    )
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs[:5]]
+    )
+
+    corrupted = bytearray(attestations[3].signature)
+    corrupted[0] ^= 0x01
+
+    from app.crypto import ValidatorAttestation
+
+    attestations[3] = ValidatorAttestation(
+        **common,
+        validator_id=attestations[3].validator_id,
+        signature=bytes(corrupted),
+    )
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+
+def test_validator_attestation_quorum_rejects_unverified_quote():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        encode_validator_attestation_signable_payload,
+        verify_validator_attestation_quorum,
+    )
+    import sr25519
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    keypairs, attestations = _build_validator_attestations_for_quorum_test(
+        4,
+        common,
+    )
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs[:5]]
+    )
+
+    modified = dict(common)
+    modified["quote_verified"] = False
+
+    public_key, private_key = keypairs[3]
+    signature = sr25519.sign(
+        (public_key, private_key),
+        encode_validator_attestation_signable_payload(**modified),
+    )
+
+    attestations[3] = ValidatorAttestation(
+        **modified,
+        validator_id=public_key,
+        signature=signature,
+    )
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )
+
+
+def test_validator_attestation_quorum_rejects_unverified_event_log():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        encode_validator_attestation_signable_payload,
+        verify_validator_attestation_quorum,
+    )
+    import sr25519
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    keypairs, attestations = _build_validator_attestations_for_quorum_test(
+        4,
+        common,
+    )
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[pair[0] for pair in keypairs[:5]]
+    )
+
+    modified = dict(common)
+    modified["event_log_verified"] = False
+
+    public_key, private_key = keypairs[3]
+    signature = sr25519.sign(
+        (public_key, private_key),
+        encode_validator_attestation_signable_payload(**modified),
+    )
+
+    attestations[3] = ValidatorAttestation(
+        **modified,
+        validator_id=public_key,
+        signature=signature,
+    )
+
+    assert not verify_validator_attestation_quorum(
+        attestations,
+        registry,
+        2 / 3,
+    )

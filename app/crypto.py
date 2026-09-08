@@ -156,6 +156,73 @@ def validator_attestation_fields_match(
     )
 
 
+def verify_validator_attestation_quorum(
+    attestations: list[ValidatorAttestation],
+    registry: MockValidatorRegistry,
+    threshold: float | Fraction,
+) -> bool:
+    """Verify a ValidatorAttestation bundle against a local validator registry."""
+    if not attestations:
+        return False
+
+    required = calculate_validator_quorum(
+        registry.active_validator_count(),
+        threshold,
+    )
+
+    if len(attestations) < required:
+        return False
+
+    validator_ids = [attestation.validator_id for attestation in attestations]
+
+    if not has_distinct_validator_ids(validator_ids):
+        return False
+
+    if not all(registry.is_active(validator_id) for validator_id in validator_ids):
+        return False
+
+    reference = attestations[0]
+
+    for attestation in attestations:
+        if not attestation.quote_verified:
+            return False
+
+        if not attestation.event_log_verified:
+            return False
+
+        if (
+            attestation.task_hash != reference.task_hash
+            or attestation.gn_weight != reference.gn_weight
+            or attestation.latency_ms != reference.latency_ms
+            or attestation.model_hash != reference.model_hash
+            or attestation.output_hash != reference.output_hash
+            or attestation.decode_policy_hash != reference.decode_policy_hash
+            or attestation.tee_type != reference.tee_type
+            or attestation.quote_verified != reference.quote_verified
+            or attestation.event_log_verified != reference.event_log_verified
+            or attestation.hardware_id_hash != reference.hardware_id_hash
+        ):
+            return False
+
+        if not verify_validator_attestation_signature(
+            public_key=attestation.validator_id,
+            signature=attestation.signature,
+            task_hash=attestation.task_hash,
+            gn_weight=attestation.gn_weight,
+            latency_ms=attestation.latency_ms,
+            model_hash=attestation.model_hash,
+            output_hash=attestation.output_hash,
+            decode_policy_hash=attestation.decode_policy_hash,
+            tee_type=attestation.tee_type,
+            quote_verified=attestation.quote_verified,
+            event_log_verified=attestation.event_log_verified,
+            hardware_id_hash=attestation.hardware_id_hash,
+        ):
+            return False
+
+    return True
+
+
 def compute_task_hash(
     agent: bytes,
     nonce: bytes,
