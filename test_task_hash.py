@@ -220,3 +220,32 @@ def test_flop_metadata_status_complete_is_present():
     }
 
     assert required.issubset(payload)
+
+def test_flop_metadata_fields_are_declarative_until_attested():
+    payload = {
+        "model_hash": "11" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": "test",
+    }
+
+    assert isinstance(payload["model_hash"], str)
+    assert isinstance(payload["gn_weight"], str)
+    assert isinstance(payload["latency_ms"], int)
+    assert isinstance(payload["decode_policy_hash"], str)
+    assert isinstance(payload["tee_type"], str)
+
+
+def test_flop_metadata_does_not_imply_attestation():
+    payload = {
+        "model_hash": "11" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": "test",
+    }
+
+    assert "quote_verified" not in payload
+    assert "event_log_verified" not in payload
+    assert "validator_attestation" not in payload
