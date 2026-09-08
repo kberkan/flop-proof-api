@@ -1757,3 +1757,97 @@ def test_verify_and_accept_prevents_second_successful_acceptance():
     assert first is True
     assert second is False
     assert processed.is_processed(task_hash) is True
+
+
+def test_report_data_binds_task_model_and_output_hashes():
+    from app.crypto import compute_report_data
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    assert isinstance(report_data, str)
+    assert len(report_data) == 64
+
+
+def test_report_data_changes_when_task_hash_changes():
+    from app.crypto import compute_report_data
+
+    common = dict(
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    first = compute_report_data(
+        task_hash=bytes.fromhex("11" * 32),
+        **common,
+    )
+    second = compute_report_data(
+        task_hash=bytes.fromhex("aa" * 32),
+        **common,
+    )
+
+    assert first != second
+
+
+def test_report_data_changes_when_model_hash_changes():
+    from app.crypto import compute_report_data
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    first = compute_report_data(
+        model_hash=bytes.fromhex("22" * 32),
+        **common,
+    )
+    second = compute_report_data(
+        model_hash=bytes.fromhex("bb" * 32),
+        **common,
+    )
+
+    assert first != second
+
+
+def test_report_data_changes_when_output_hash_changes():
+    from app.crypto import compute_report_data
+
+    common = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=bytes.fromhex("22" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    first = compute_report_data(
+        output_hash=bytes.fromhex("33" * 32),
+        **common,
+    )
+    second = compute_report_data(
+        output_hash=bytes.fromhex("cc" * 32),
+        **common,
+    )
+
+    assert first != second
