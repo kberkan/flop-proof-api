@@ -129,3 +129,39 @@ def test_task_hash_mismatch_is_detectable():
     supplied = "00" * 32
 
     assert supplied != calculated
+
+def test_flop_result_metadata_can_be_carried_without_output_hash():
+    payload = {
+        "content": "model output",
+        "content_hash": "sha256:placeholder",
+        "task_hash": "aa" * 32,
+        "task_hash_inputs": {
+            "agent": "aa" * 32,
+            "nonce": "746573742d6e6f6e6365",
+            "model_hash": "11" * 32,
+            "payload_hash": "22" * 32,
+            "commit_hash": "33" * 32,
+        },
+        "model_hash": "11" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": "test",
+    }
+
+    assert payload["task_hash"]
+    assert payload["model_hash"]
+    assert payload["gn_weight"]
+    assert payload["latency_ms"] == 125
+    assert payload["decode_policy_hash"]
+    assert payload["tee_type"]
+    assert "output_hash" not in payload
+
+
+def test_flop_result_metadata_output_hash_is_optional():
+    payload = {
+        "content": "model output",
+        "content_hash": "sha256:placeholder",
+    }
+
+    assert payload.get("output_hash") is None
