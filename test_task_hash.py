@@ -3326,3 +3326,311 @@ def test_validator_attestation_rejects_any_result_metadata_mismatch():
         attestation=attestation,
         result=result,
     )
+
+
+def test_validator_attestation_result_binding_rejects_missing_field():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("01" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("02" * 32),
+        output_hash=bytes.fromhex("03" * 32),
+        decode_policy_hash=bytes.fromhex("04" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("05" * 32),
+        validator_id=bytes.fromhex("06" * 32),
+        signature=bytes.fromhex("07" * 64),
+    )
+
+    result = {
+        "task_hash": attestation.task_hash.hex(),
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": 100,
+        "latency_ms": 200,
+        "tee_type": 1,
+    }
+
+    assert not validator_attestation_matches_result(
+        attestation=attestation,
+        result=result,
+    )
+
+
+def test_validator_attestation_result_binding_rejects_none_value():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("12" * 32),
+        output_hash=bytes.fromhex("13" * 32),
+        decode_policy_hash=bytes.fromhex("14" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("15" * 32),
+        validator_id=bytes.fromhex("16" * 32),
+        signature=bytes.fromhex("17" * 64),
+    )
+
+    result = {
+        "task_hash": attestation.task_hash.hex(),
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": None,
+        "latency_ms": 200,
+        "decode_policy_hash": attestation.decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    assert not validator_attestation_matches_result(
+        attestation=attestation,
+        result=result,
+    )
+
+
+def test_validator_attestation_result_binding_rejects_wrong_type():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("21" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("23" * 32),
+        decode_policy_hash=bytes.fromhex("24" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("25" * 32),
+        validator_id=bytes.fromhex("26" * 32),
+        signature=bytes.fromhex("27" * 64),
+    )
+
+    result = {
+        "task_hash": attestation.task_hash.hex(),
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": "100",
+        "latency_ms": 200,
+        "decode_policy_hash": attestation.decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    assert not validator_attestation_matches_result(
+        attestation=attestation,
+        result=result,
+    )
+
+
+def test_validator_attestation_result_binding_rejects_malformed_hash():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("31" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("32" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("34" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("35" * 32),
+        validator_id=bytes.fromhex("36" * 32),
+        signature=bytes.fromhex("37" * 64),
+    )
+
+    result = {
+        "task_hash": "not-hex",
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": 100,
+        "latency_ms": 200,
+        "decode_policy_hash": attestation.decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    assert not validator_attestation_matches_result(
+        attestation=attestation,
+        result=result,
+    )
+
+
+def test_validator_attestation_result_binding_rejects_each_hash_independently():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("41" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("42" * 32),
+        output_hash=bytes.fromhex("43" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("45" * 32),
+        validator_id=bytes.fromhex("46" * 32),
+        signature=bytes.fromhex("47" * 64),
+    )
+
+    result = {
+        "task_hash": attestation.task_hash.hex(),
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": 100,
+        "latency_ms": 200,
+        "decode_policy_hash": attestation.decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    for field in (
+        "task_hash",
+        "output_hash",
+        "model_hash",
+        "decode_policy_hash",
+    ):
+        modified = dict(result)
+        modified[field] = bytes.fromhex("aa" * 32).hex()
+
+        assert not validator_attestation_matches_result(
+            attestation=attestation,
+            result=modified,
+        )
+
+
+def test_validator_attestation_result_binding_rejects_each_scalar_independently():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("51" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("52" * 32),
+        output_hash=bytes.fromhex("53" * 32),
+        decode_policy_hash=bytes.fromhex("54" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+        validator_id=bytes.fromhex("56" * 32),
+        signature=bytes.fromhex("57" * 64),
+    )
+
+    result = {
+        "task_hash": attestation.task_hash.hex(),
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": 100,
+        "latency_ms": 200,
+        "decode_policy_hash": attestation.decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    for field, bad_value in (
+        ("gn_weight", 101),
+        ("latency_ms", 201),
+        ("tee_type", 2),
+    ):
+        modified = dict(result)
+        modified[field] = bad_value
+
+        assert not validator_attestation_matches_result(
+            attestation=attestation,
+            result=modified,
+        )
+
+
+def test_validator_attestation_result_binding_failure_never_counts_as_match():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("61" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("62" * 32),
+        output_hash=bytes.fromhex("63" * 32),
+        decode_policy_hash=bytes.fromhex("64" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("65" * 32),
+        validator_id=bytes.fromhex("66" * 32),
+        signature=bytes.fromhex("67" * 64),
+    )
+
+    result = None
+
+    assert not validator_attestation_matches_result(
+        attestation=attestation,
+        result=result,
+    )
+
+
+def test_validator_attestation_result_binding_does_not_mutate_result():
+    from app.crypto import (
+        ValidatorAttestation,
+        validator_attestation_matches_result,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=bytes.fromhex("71" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("72" * 32),
+        output_hash=bytes.fromhex("73" * 32),
+        decode_policy_hash=bytes.fromhex("74" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("75" * 32),
+        validator_id=bytes.fromhex("76" * 32),
+        signature=bytes.fromhex("77" * 64),
+    )
+
+    result = {
+        "task_hash": attestation.task_hash.hex(),
+        "output_hash": attestation.output_hash.hex(),
+        "model_hash": attestation.model_hash.hex(),
+        "gn_weight": 100,
+        "latency_ms": 200,
+        "decode_policy_hash": attestation.decode_policy_hash.hex(),
+        "tee_type": 1,
+    }
+
+    original = dict(result)
+
+    assert validator_attestation_matches_result(
+        attestation=attestation,
+        result=result,
+    )
+
+    assert result == original
