@@ -2,7 +2,7 @@ import hashlib
 
 
 def test_task_hash_reference_shape():
-    agent = b"agent"
+    agent = bytes.fromhex("aa" * 32)
     nonce = b"nonce"
     model_hash = bytes.fromhex("11" * 32)
     payload_hash = bytes.fromhex("22" * 32)
@@ -30,3 +30,35 @@ def test_task_hash_reference_shape():
         payload_hash=payload_hash,
         commit_hash=commit_hash,
     ) == expected
+
+
+def test_task_hash_requires_32_byte_agent_and_hashes():
+    from app.crypto import compute_task_hash
+
+    valid = bytes(32)
+
+    invalid_cases = [
+        ("agent", b"agent"),
+        ("model_hash", b"\x11" * 31),
+        ("payload_hash", b"\x22" * 31),
+        ("commit_hash", b"\x33" * 31),
+    ]
+
+    for field, invalid in invalid_cases:
+        values = {
+            "agent": valid,
+            "nonce": b"nonce",
+            "model_hash": valid,
+            "payload_hash": valid,
+            "commit_hash": valid,
+        }
+        values[field] = invalid
+
+        try:
+            compute_task_hash(**values)
+        except ValueError:
+            continue
+
+        raise AssertionError(
+            f"{field} must be exactly 32 bytes"
+        )

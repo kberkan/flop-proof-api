@@ -22,6 +22,15 @@ def compute_task_hash(
     commit_hash: bytes,
 ) -> str:
     """Compute the draft FLOP task hash from its byte components."""
+    for name, value in (
+        ("agent", agent),
+        ("model_hash", model_hash),
+        ("payload_hash", payload_hash),
+        ("commit_hash", commit_hash),
+    ):
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
     preimage = (
         agent
         + nonce
