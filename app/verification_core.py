@@ -130,6 +130,7 @@ def verify_proof_events(
     result_hash_valid = None
     artifact_hash_valid = None
     task_hash_valid = None
+    flop_metadata_status = "absent"
 
     for event in events:
         if event.get("type") == "result.created":
@@ -147,6 +148,28 @@ def verify_proof_events(
 
                 task_hash = payload.get("task_hash")
                 task_hash_inputs = payload.get("task_hash_inputs")
+
+                flop_metadata_fields = {
+                    "task_hash",
+                    "model_hash",
+                    "gn_weight",
+                    "latency_ms",
+                    "decode_policy_hash",
+                    "tee_type",
+                }
+
+                present_fields = {
+                    field
+                    for field in flop_metadata_fields
+                    if payload.get(field) is not None
+                }
+
+                if not present_fields:
+                    flop_metadata_status = "absent"
+                elif present_fields == flop_metadata_fields:
+                    flop_metadata_status = "present"
+                else:
+                    flop_metadata_status = "incomplete"
 
                 if task_hash is not None:
                     try:
@@ -207,5 +230,6 @@ def verify_proof_events(
         "result_hash_valid": result_hash_valid,
         "artifact_hash_valid": artifact_hash_valid,
         "task_hash_valid": task_hash_valid,
+        "flop_metadata_status": flop_metadata_status,
         "checks": checks,
     }
