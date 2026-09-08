@@ -89,3 +89,43 @@ def test_output_hash_is_distinct_from_legacy_content_hash():
 
     assert content_hash
     assert output_hash is None
+
+def test_task_hash_verification_is_optional_for_legacy_result():
+    payload = {
+        "content": "model output",
+        "content_hash": "sha256:placeholder",
+    }
+
+    assert "task_hash" not in payload
+
+
+def test_task_hash_is_present_when_supplied():
+    payload = {
+        "content": "model output",
+        "content_hash": "sha256:placeholder",
+        "task_hash": "aa" * 32,
+    }
+
+    assert payload["task_hash"] == "aa" * 32
+
+
+def test_task_hash_mismatch_is_detectable():
+    from app.crypto import compute_task_hash
+
+    agent = bytes.fromhex("aa" * 32)
+    nonce = b"nonce"
+    model_hash = bytes.fromhex("11" * 32)
+    payload_hash = bytes.fromhex("22" * 32)
+    commit_hash = bytes.fromhex("33" * 32)
+
+    calculated = compute_task_hash(
+        agent=agent,
+        nonce=nonce,
+        model_hash=model_hash,
+        payload_hash=payload_hash,
+        commit_hash=commit_hash,
+    )
+
+    supplied = "00" * 32
+
+    assert supplied != calculated

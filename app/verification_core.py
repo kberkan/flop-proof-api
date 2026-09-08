@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from .crypto import (
+    compute_task_hash,
     hash_event_record,
     sha256_bytes,
     sha256_json,
@@ -128,6 +129,7 @@ def verify_proof_events(
 
     result_hash_valid = None
     artifact_hash_valid = None
+    task_hash_valid = None
 
     for event in events:
         if event.get("type") == "result.created":
@@ -142,6 +144,34 @@ def verify_proof_events(
                         f"sha256:{sha256_bytes(content.encode('utf-8'))}"
                     )
                     result_hash_valid = calculated == content_hash
+
+                task_hash = payload.get("task_hash")
+                task_hash_inputs = payload.get("task_hash_inputs")
+
+                if task_hash is not None:
+                    try:
+                        if not isinstance(task_hash_inputs, dict):
+                            raise ValueError("missing task_hash inputs")
+
+                        calculated_task_hash = compute_task_hash(
+                            agent=bytes.fromhex(task_hash_inputs["agent"]),
+                            nonce=bytes.fromhex(task_hash_inputs["nonce"]),
+                            model_hash=bytes.fromhex(
+                                task_hash_inputs["model_hash"]
+                            ),
+                            payload_hash=bytes.fromhex(
+                                task_hash_inputs["payload_hash"]
+                            ),
+                            commit_hash=bytes.fromhex(
+                                task_hash_inputs["commit_hash"]
+                            ),
+                        )
+
+                        task_hash_valid = (
+                            task_hash == calculated_task_hash
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        task_hash_valid = False
 
         elif event.get("type") == "artifact.created":
             payload = event.get("payload")
@@ -163,7 +193,11 @@ def verify_proof_events(
                 elif artifact_hash:
                     artifact_hash_valid = True
 
-    if result_hash_valid is False or artifact_hash_valid is False:
+    if (
+        result_hash_valid is False
+        or artifact_hash_valid is False
+        or task_hash_valid is False
+    ):
         all_events_valid = False
 
     return {
@@ -172,5 +206,6 @@ def verify_proof_events(
         "events_checked": len(events),
         "result_hash_valid": result_hash_valid,
         "artifact_hash_valid": artifact_hash_valid,
+        "task_hash_valid": task_hash_valid,
         "checks": checks,
     }
