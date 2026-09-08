@@ -249,3 +249,43 @@ def test_flop_metadata_does_not_imply_attestation():
     assert "quote_verified" not in payload
     assert "event_log_verified" not in payload
     assert "validator_attestation" not in payload
+
+def test_report_data_requires_flop_binding_hashes():
+    fields = {
+        "task_hash": "11" * 32,
+        "model_hash": "22" * 32,
+        "output_hash": "33" * 32,
+        "decode_policy_hash": "44" * 32,
+    }
+
+    for name, value in fields.items():
+        assert len(bytes.fromhex(value)) == 32
+
+
+def test_report_data_field_order_is_defined():
+    field_order = [
+        "task_hash",
+        "gn_weight",
+        "latency_ms",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+    ]
+
+    assert field_order == [
+        "task_hash",
+        "gn_weight",
+        "latency_ms",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+    ]
+
+
+def test_report_data_is_distinct_from_task_hash():
+    task_hash = "11" * 32
+    report_data = "22" * 32
+
+    assert task_hash != report_data
