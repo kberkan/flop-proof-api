@@ -2,7 +2,11 @@ import uuid
 import hashlib
 import os
 
-from app.crypto import generate_test_keypair, public_key_to_test_did
+from app.crypto import (
+    compute_task_hash,
+    generate_test_keypair,
+    public_key_to_test_did,
+)
 from client import FlopProofClient
 
 
@@ -46,6 +50,20 @@ def test_signed_sdk_e2e():
         ).hexdigest()
     )
 
+    task_agent = bytes.fromhex("aa" * 32)
+    task_nonce = b"pytest-task-nonce"
+    task_model_hash = bytes.fromhex("11" * 32)
+    task_payload_hash = bytes.fromhex("22" * 32)
+    task_commit_hash = bytes.fromhex("33" * 32)
+
+    task_hash = compute_task_hash(
+        agent=task_agent,
+        nonce=task_nonce,
+        model_hash=task_model_hash,
+        payload_hash=task_payload_hash,
+        commit_hash=task_commit_hash,
+    )
+
     client.append_signed_event(
         proof_id=proof_id,
         private_key=private_key,
@@ -54,6 +72,14 @@ def test_signed_sdk_e2e():
         payload={
             "content": result_content,
             "content_hash": result_hash,
+            "task_hash": task_hash,
+            "task_hash_inputs": {
+                "agent": task_agent.hex(),
+                "nonce": task_nonce.hex(),
+                "model_hash": task_model_hash.hex(),
+                "payload_hash": task_payload_hash.hex(),
+                "commit_hash": task_commit_hash.hex(),
+            },
         },
         nonce=nonce + "-result",
     )
@@ -63,6 +89,7 @@ def test_signed_sdk_e2e():
     assert verification["verdict"] == "valid"
     assert verification["events_checked"] == 3
     assert verification["result_hash_valid"] is True
+    assert verification["task_hash_valid"] is True
 
     for check in verification["checks"]:
         assert check["sequence_valid"] is True
