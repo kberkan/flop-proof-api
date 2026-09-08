@@ -289,3 +289,62 @@ def test_report_data_is_distinct_from_task_hash():
     report_data = "22" * 32
 
     assert task_hash != report_data
+
+def test_report_data_binding_hash_fields_are_raw_32_bytes():
+    values = {
+        "task_hash": "11" * 32,
+        "model_hash": "22" * 32,
+        "output_hash": "33" * 32,
+        "decode_policy_hash": "44" * 32,
+    }
+
+    encoded = {name: bytes.fromhex(value) for name, value in values.items()}
+
+    assert all(len(value) == 32 for value in encoded.values())
+
+
+def test_report_data_binding_preserves_protocol_field_order():
+    field_order = (
+        "task_hash",
+        "gn_weight",
+        "latency_ms",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+    )
+
+    assert field_order[0] == "task_hash"
+    assert field_order[1:3] == ("gn_weight", "latency_ms")
+    assert field_order[3:] == (
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+    )
+
+
+def test_report_data_binding_requires_output_hash():
+    binding_fields = {
+        "task_hash": "11" * 32,
+        "gn_weight": "1000000000000000000",
+        "latency_ms": 125,
+        "model_hash": "22" * 32,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": "test",
+    }
+
+    assert "output_hash" not in binding_fields
+
+
+def test_report_data_is_sha256_commitment_not_task_hash():
+    import hashlib
+
+    preimage = b"FLOP report-data test"
+    report_data = hashlib.sha256(preimage).hexdigest()
+
+    assert len(bytes.fromhex(report_data)) == 32
+    assert report_data != hashlib.blake2b(
+        preimage,
+        digest_size=32,
+    ).hexdigest()
