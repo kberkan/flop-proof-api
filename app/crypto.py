@@ -268,7 +268,7 @@ def encode_validator_attestation_signable_payload(
     )
 
 def sign_validator_attestation(
-    signing_key,
+    signing_key: Ed25519PrivateKey,
     task_hash: bytes,
     gn_weight: int,
     latency_ms: int,
@@ -293,11 +293,11 @@ def sign_validator_attestation(
         event_log_verified=event_log_verified,
         hardware_id_hash=hardware_id_hash,
     )
-    return signing_key.sign(payload).signature
+    return signing_key.sign(payload)
 
 
 def verify_validator_attestation_signature(
-    verify_key,
+    verify_key: Ed25519PublicKey,
     signature: bytes,
     task_hash: bytes,
     gn_weight: int,
@@ -325,7 +325,7 @@ def verify_validator_attestation_signature(
     )
 
     try:
-        verify_key.verify(payload, signature)
+        verify_key.verify(signature, payload)
         return True
     except Exception:
         return False

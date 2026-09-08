@@ -559,14 +559,13 @@ def test_validator_attestation_signable_payload_uses_scale_little_endian():
 
 
 def test_validator_attestation_signature_round_trip():
-    from nacl.signing import SigningKey
     from app.crypto import (
+        generate_test_keypair,
         sign_validator_attestation,
         verify_validator_attestation_signature,
     )
 
-    signing_key = SigningKey.generate()
-    verify_key = signing_key.verify_key
+    signing_key, verify_key = generate_test_keypair()
 
     kwargs = dict(
         task_hash=bytes.fromhex("11" * 32),
@@ -590,14 +589,13 @@ def test_validator_attestation_signature_round_trip():
 
 
 def test_validator_attestation_signature_rejects_tampering():
-    from nacl.signing import SigningKey
     from app.crypto import (
+        generate_test_keypair,
         sign_validator_attestation,
         verify_validator_attestation_signature,
     )
 
-    signing_key = SigningKey.generate()
-    verify_key = signing_key.verify_key
+    signing_key, verify_key = generate_test_keypair()
 
     kwargs = dict(
         task_hash=bytes.fromhex("11" * 32),
