@@ -218,6 +218,118 @@ def verify_floop_signature(
         signature,
     )
 
+def encode_validator_attestation_signable_payload(
+    task_hash: bytes,
+    gn_weight: int,
+    latency_ms: int,
+    model_hash: bytes,
+    output_hash: bytes,
+    decode_policy_hash: bytes,
+    tee_type: int,
+    quote_verified: bool,
+    event_log_verified: bool,
+    hardware_id_hash: bytes,
+) -> bytes:
+    """Encode the 10-field ValidatorAttestation signable subset using SCALE."""
+    hash_fields = (
+        ("task_hash", task_hash),
+        ("model_hash", model_hash),
+        ("output_hash", output_hash),
+        ("decode_policy_hash", decode_policy_hash),
+        ("hardware_id_hash", hardware_id_hash),
+    )
+
+    for name, value in hash_fields:
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
+    if not isinstance(gn_weight, int) or not 0 <= gn_weight <= 2**64 - 1:
+        raise ValueError("gn_weight must be a u64")
+    if not isinstance(latency_ms, int) or not 0 <= latency_ms <= 2**64 - 1:
+        raise ValueError("latency_ms must be a u64")
+    if not isinstance(tee_type, int) or not 0 <= tee_type <= 255:
+        raise ValueError("tee_type must be a u8")
+    if not isinstance(quote_verified, bool):
+        raise ValueError("quote_verified must be a bool")
+    if not isinstance(event_log_verified, bool):
+        raise ValueError("event_log_verified must be a bool")
+
+    return (
+        task_hash
+        + gn_weight.to_bytes(8, "little")
+        + latency_ms.to_bytes(8, "little")
+        + model_hash
+        + output_hash
+        + decode_policy_hash
+        + tee_type.to_bytes(1, "little")
+        + bytes([quote_verified])
+        + bytes([event_log_verified])
+        + hardware_id_hash
+    )
+
+def sign_validator_attestation(
+    signing_key,
+    task_hash: bytes,
+    gn_weight: int,
+    latency_ms: int,
+    model_hash: bytes,
+    output_hash: bytes,
+    decode_policy_hash: bytes,
+    tee_type: int,
+    quote_verified: bool,
+    event_log_verified: bool,
+    hardware_id_hash: bytes,
+) -> bytes:
+    """Sign the SCALE-encoded ValidatorAttestation signable subset."""
+    payload = encode_validator_attestation_signable_payload(
+        task_hash=task_hash,
+        gn_weight=gn_weight,
+        latency_ms=latency_ms,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=tee_type,
+        quote_verified=quote_verified,
+        event_log_verified=event_log_verified,
+        hardware_id_hash=hardware_id_hash,
+    )
+    return signing_key.sign(payload).signature
+
+
+def verify_validator_attestation_signature(
+    verify_key,
+    signature: bytes,
+    task_hash: bytes,
+    gn_weight: int,
+    latency_ms: int,
+    model_hash: bytes,
+    output_hash: bytes,
+    decode_policy_hash: bytes,
+    tee_type: int,
+    quote_verified: bool,
+    event_log_verified: bool,
+    hardware_id_hash: bytes,
+) -> bool:
+    """Verify a ValidatorAttestation signature over its SCALE payload."""
+    payload = encode_validator_attestation_signable_payload(
+        task_hash=task_hash,
+        gn_weight=gn_weight,
+        latency_ms=latency_ms,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=tee_type,
+        quote_verified=quote_verified,
+        event_log_verified=event_log_verified,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    try:
+        verify_key.verify(payload, signature)
+        return True
+    except Exception:
+        return False
+
 def compute_report_data(
     task_hash: bytes,
     gn_weight: bytes,

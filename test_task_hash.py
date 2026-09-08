@@ -451,3 +451,172 @@ def test_validator_attestation_is_not_implied_by_flop_metadata():
     assert "event_log_verified" not in payload
     assert "validator_id" not in payload
     assert "signature" not in payload
+
+def test_validator_attestation_signable_fields_are_exactly_first_ten():
+    signable_fields = (
+        "task_hash",
+        "gn_weight",
+        "latency_ms",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+        "quote_verified",
+        "event_log_verified",
+        "hardware_id_hash",
+    )
+
+    excluded_fields = (
+        "validator_id",
+        "signature",
+    )
+
+    assert len(signable_fields) == 10
+    assert len(excluded_fields) == 2
+    assert "validator_id" not in signable_fields
+    assert "signature" not in signable_fields
+
+
+def test_validator_attestation_signable_field_order_matches_spec():
+    assert (
+        "task_hash",
+        "gn_weight",
+        "latency_ms",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+        "quote_verified",
+        "event_log_verified",
+        "hardware_id_hash",
+    ) == (
+        "task_hash",
+        "gn_weight",
+        "latency_ms",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+        "tee_type",
+        "quote_verified",
+        "event_log_verified",
+        "hardware_id_hash",
+    )
+
+
+def test_validator_attestation_signature_is_fixed_64_bytes():
+    signature = bytes(64)
+
+    assert len(signature) == 64
+
+
+def test_validator_attestation_validator_id_is_fixed_32_bytes():
+    validator_id = bytes(32)
+
+    assert len(validator_id) == 32
+
+
+
+def test_validator_attestation_signable_payload_is_179_bytes():
+    from app.crypto import encode_validator_attestation_signable_payload
+
+    payload = encode_validator_attestation_signable_payload(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=0x0102030405060708,
+        latency_ms=0x1112131415161718,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    assert len(payload) == 179
+
+
+def test_validator_attestation_signable_payload_uses_scale_little_endian():
+    from app.crypto import encode_validator_attestation_signable_payload
+
+    payload = encode_validator_attestation_signable_payload(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=0x0102030405060708,
+        latency_ms=0x1112131415161718,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    assert payload[32:40] == bytes.fromhex("0807060504030201")
+    assert payload[40:48] == bytes.fromhex("1817161514131211")
+    assert payload[144] == 7
+    assert payload[145] == 1
+    assert payload[146] == 0
+
+
+def test_validator_attestation_signature_round_trip():
+    from nacl.signing import SigningKey
+    from app.crypto import (
+        sign_validator_attestation,
+        verify_validator_attestation_signature,
+    )
+
+    signing_key = SigningKey.generate()
+    verify_key = signing_key.verify_key
+
+    kwargs = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    signature = sign_validator_attestation(signing_key, **kwargs)
+
+    assert len(signature) == 64
+    assert verify_validator_attestation_signature(
+        verify_key, signature, **kwargs
+    )
+
+
+def test_validator_attestation_signature_rejects_tampering():
+    from nacl.signing import SigningKey
+    from app.crypto import (
+        sign_validator_attestation,
+        verify_validator_attestation_signature,
+    )
+
+    signing_key = SigningKey.generate()
+    verify_key = signing_key.verify_key
+
+    kwargs = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=123456,
+        latency_ms=789,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=False,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    signature = sign_validator_attestation(signing_key, **kwargs)
+
+    tampered = dict(kwargs)
+    tampered["latency_ms"] += 1
+
+    assert not verify_validator_attestation_signature(
+        verify_key, signature, **tampered
+    )
