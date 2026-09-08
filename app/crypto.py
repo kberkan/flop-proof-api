@@ -599,3 +599,28 @@ def compute_report_data(
     )
 
     return hashlib.sha256(preimage).hexdigest()
+
+
+def verify_and_accept_validator_attestation_quorum(
+    attestations: list[ValidatorAttestation],
+    registry: MockValidatorRegistry,
+    threshold: float | Fraction,
+    processed_tasks: ProcessedTasks,
+) -> bool:
+    """Verify an attestation quorum and consume its task hash exactly once."""
+    if not attestations:
+        return False
+
+    task_hash = attestations[0].task_hash
+
+    if processed_tasks.is_processed(task_hash):
+        return False
+
+    if not verify_validator_attestation_quorum(
+        attestations=attestations,
+        registry=registry,
+        threshold=threshold,
+    ):
+        return False
+
+    return processed_tasks.mark_processed(task_hash)

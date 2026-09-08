@@ -1569,3 +1569,191 @@ def test_processed_tasks_prevents_second_successful_quorum_for_same_task():
     assert first_quorum_succeeded is True
     assert second_quorum_succeeded is False
     assert processed.is_processed(task_hash)
+
+def test_verify_and_accept_rejects_already_processed_task():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_quorum,
+    )
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+    registry = MockValidatorRegistry(
+        [bytes.fromhex("01" * 32), bytes.fromhex("02" * 32)]
+    )
+
+    assert processed.mark_processed(task_hash) is True
+
+    result = verify_and_accept_validator_attestation_quorum(
+        attestations=[],
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    )
+
+    assert result is False
+    assert processed.is_processed(task_hash)
+
+
+def test_verify_and_accept_does_not_consume_task_after_failed_quorum():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_quorum,
+    )
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+    registry = MockValidatorRegistry(
+        [bytes.fromhex("01" * 32), bytes.fromhex("02" * 32)]
+    )
+
+    result = verify_and_accept_validator_attestation_quorum(
+        attestations=[],
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    )
+
+    assert result is False
+    assert processed.is_processed(task_hash) is False
+
+
+def test_verify_and_accept_marks_task_only_after_successful_quorum():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation_quorum,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    keypairs = [
+        sr25519.pair_from_seed(bytes([1]) * 32),
+        sr25519.pair_from_seed(bytes([2]) * 32),
+    ]
+    attestations = []
+
+    for validator_id, secret_key in keypairs:
+        keypair = (validator_id, secret_key)
+        signature = sign_validator_attestation(
+            keypair=keypair,
+            task_hash=task_hash,
+            gn_weight=100,
+            latency_ms=25,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+        attestations.append(
+            ValidatorAttestation(
+                task_hash=task_hash,
+                gn_weight=100,
+                latency_ms=25,
+                model_hash=model_hash,
+                output_hash=output_hash,
+                decode_policy_hash=decode_policy_hash,
+                tee_type=1,
+                quote_verified=True,
+                event_log_verified=True,
+                hardware_id_hash=hardware_id_hash,
+                validator_id=validator_id,
+                signature=signature,
+            )
+        )
+
+    registry = MockValidatorRegistry(
+        [keypairs[0][0], keypairs[1][0]]
+    )
+    processed = ProcessedTasks()
+
+    result = verify_and_accept_validator_attestation_quorum(
+        attestations=attestations,
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    )
+
+    assert result is True
+    assert processed.is_processed(task_hash) is True
+
+
+def test_verify_and_accept_prevents_second_successful_acceptance():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ProcessedTasks,
+        ValidatorAttestation,
+        sign_validator_attestation,
+        verify_and_accept_validator_attestation_quorum,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([3]) * 32)
+    keypair = (validator_id, secret_key)
+
+    signature = sign_validator_attestation(
+        keypair=keypair,
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    registry = MockValidatorRegistry([validator_id])
+    processed = ProcessedTasks()
+
+    first = verify_and_accept_validator_attestation_quorum(
+        attestations=[attestation],
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    )
+    second = verify_and_accept_validator_attestation_quorum(
+        attestations=[attestation],
+        registry=registry,
+        threshold=1.0,
+        processed_tasks=processed,
+    )
+
+    assert first is True
+    assert second is False
+    assert processed.is_processed(task_hash) is True
