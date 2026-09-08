@@ -240,3 +240,23 @@ def test_result_with_invalid_task_hash_is_invalid():
 
     assert result["verdict"] == "invalid"
     assert result["task_hash_valid"] is False
+
+def test_report_data_is_optional_metadata_on_result():
+    payload = {
+        "content": "model output",
+        "report_data": "55" * 32,
+    }
+
+    assert payload["report_data"] == "55" * 32
+    assert len(bytes.fromhex(payload["report_data"])) == 32
+
+
+def test_report_data_does_not_imply_validator_attestation():
+    payload = {
+        "content": "model output",
+        "report_data": "55" * 32,
+    }
+
+    assert "validator_attestation" not in payload
+    assert "quote_verified" not in payload
+    assert "event_log_verified" not in payload
