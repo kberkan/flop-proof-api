@@ -1,6 +1,7 @@
 import base64
 import hashlib
 from dataclasses import dataclass
+from fractions import Fraction
 
 import json
 
@@ -64,24 +65,63 @@ class ValidatorAttestation:
             raise ValueError("event_log_verified must be a bool")
 
 
+@dataclass(frozen=True)
+class MockValidatorRegistry:
+    """Local/test-only source of active validator membership."""
+
+    _active_validator_ids: tuple[bytes, ...]
+
+    def __init__(self, active_validator_ids: list[bytes]) -> None:
+        normalized = tuple(active_validator_ids)
+
+        for validator_id in normalized:
+            if not isinstance(validator_id, bytes) or len(validator_id) != 32:
+                raise ValueError(
+                    "validator IDs must be exactly 32 bytes"
+                )
+
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("duplicate validator IDs are not allowed")
+
+        object.__setattr__(
+            self,
+            "_active_validator_ids",
+            normalized,
+        )
+
+    def active_validator_ids(self) -> tuple[bytes, ...]:
+        return self._active_validator_ids
+
+    def active_validator_count(self) -> int:
+        return len(self._active_validator_ids)
+
+    def is_active(self, validator_id: bytes) -> bool:
+        return validator_id in self._active_validator_ids
+
+
 def calculate_validator_quorum(
     active_validator_count: int,
-    threshold: float,
+    threshold: float | Fraction,
 ) -> int:
     """Calculate the minimum attestation quorum from active validators."""
     if not isinstance(active_validator_count, int):
         raise ValueError("active_validator_count must be an integer")
     if active_validator_count < 0:
         raise ValueError("active_validator_count cannot be negative")
-    if not isinstance(threshold, (int, float)):
-        raise ValueError("threshold must be numeric")
+
+    try:
+        threshold = Fraction(threshold)
+    except (TypeError, ValueError, ZeroDivisionError):
+        raise ValueError("threshold must be numeric") from None
+
     if not 0 < threshold <= 1:
         raise ValueError("threshold must be greater than 0 and at most 1")
 
-    numerator, denominator = threshold.as_integer_ratio()
     required = (
-        active_validator_count * numerator + denominator - 1
-    ) // denominator
+        active_validator_count * threshold.numerator
+        + threshold.denominator
+        - 1
+    ) // threshold.denominator
 
     return max(1, required)
 

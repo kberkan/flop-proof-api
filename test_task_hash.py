@@ -946,3 +946,92 @@ def test_validator_quorum_rounds_fractional_requirement_up():
 
     # 5 * 2/3 = 3.333..., therefore 4 are required.
     assert calculate_validator_quorum(5, 2 / 3) == 4
+
+def test_mock_validator_registry_tracks_active_validators():
+    from app.crypto import MockValidatorRegistry
+
+    validator_a = bytes.fromhex("11" * 32)
+    validator_b = bytes.fromhex("22" * 32)
+    validator_c = bytes.fromhex("33" * 32)
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[
+            validator_a,
+            validator_b,
+            validator_c,
+        ]
+    )
+
+    assert registry.active_validator_count() == 3
+    assert registry.is_active(validator_a)
+    assert registry.is_active(validator_b)
+    assert registry.is_active(validator_c)
+
+
+def test_mock_validator_registry_excludes_inactive_validators():
+    from app.crypto import MockValidatorRegistry
+
+    validator_a = bytes.fromhex("11" * 32)
+    validator_b = bytes.fromhex("22" * 32)
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[validator_a]
+    )
+
+    assert registry.active_validator_count() == 1
+    assert registry.is_active(validator_a)
+    assert not registry.is_active(validator_b)
+
+
+def test_mock_validator_registry_rejects_duplicate_validator_ids():
+    from app.crypto import MockValidatorRegistry
+
+    validator_a = bytes.fromhex("11" * 32)
+
+    try:
+        MockValidatorRegistry(
+            active_validator_ids=[
+                validator_a,
+                validator_a,
+            ]
+        )
+    except ValueError:
+        return
+
+    raise AssertionError(
+        "duplicate validator IDs must be rejected"
+    )
+
+
+def test_mock_validator_registry_requires_32_byte_validator_ids():
+    from app.crypto import MockValidatorRegistry
+
+    try:
+        MockValidatorRegistry(
+            active_validator_ids=[b"short"]
+        )
+    except ValueError:
+        return
+
+    raise AssertionError(
+        "validator IDs must be exactly 32 bytes"
+    )
+
+
+def test_mock_validator_registry_returns_active_validator_ids():
+    from app.crypto import MockValidatorRegistry
+
+    validator_a = bytes.fromhex("11" * 32)
+    validator_b = bytes.fromhex("22" * 32)
+
+    registry = MockValidatorRegistry(
+        active_validator_ids=[
+            validator_a,
+            validator_b,
+        ]
+    )
+
+    assert registry.active_validator_ids() == (
+        validator_a,
+        validator_b,
+    )
