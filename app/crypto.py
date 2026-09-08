@@ -99,6 +99,31 @@ class MockValidatorRegistry:
         return validator_id in self._active_validator_ids
 
 
+class ProcessedTasks:
+    """Local/in-memory replay guard for creditable task hashes."""
+
+    def __init__(self) -> None:
+        self._processed: set[bytes] = set()
+
+    @staticmethod
+    def _validate_task_hash(task_hash: bytes) -> None:
+        if not isinstance(task_hash, bytes) or len(task_hash) != 32:
+            raise ValueError("task_hash must be exactly 32 bytes")
+
+    def is_processed(self, task_hash: bytes) -> bool:
+        self._validate_task_hash(task_hash)
+        return task_hash in self._processed
+
+    def mark_processed(self, task_hash: bytes) -> bool:
+        self._validate_task_hash(task_hash)
+
+        if task_hash in self._processed:
+            return False
+
+        self._processed.add(task_hash)
+        return True
+
+
 def calculate_validator_quorum(
     active_validator_count: int,
     threshold: float | Fraction,

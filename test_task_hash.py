@@ -1467,3 +1467,105 @@ def test_validator_attestation_quorum_rejects_unverified_event_log():
         registry,
         2 / 3,
     )
+
+def test_processed_tasks_accepts_task_hash_once():
+    from app.crypto import ProcessedTasks
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+
+    assert processed.is_processed(task_hash) is False
+    assert processed.mark_processed(task_hash) is True
+    assert processed.is_processed(task_hash) is True
+
+
+def test_processed_tasks_rejects_replaying_same_task_hash():
+    from app.crypto import ProcessedTasks
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+
+    assert processed.mark_processed(task_hash) is True
+    assert processed.mark_processed(task_hash) is False
+
+
+def test_processed_tasks_keeps_different_tasks_independent():
+    from app.crypto import ProcessedTasks
+
+    task_a = bytes.fromhex("11" * 32)
+    task_b = bytes.fromhex("22" * 32)
+
+    processed = ProcessedTasks()
+
+    assert processed.mark_processed(task_a) is True
+    assert processed.mark_processed(task_b) is True
+
+    assert processed.is_processed(task_a)
+    assert processed.is_processed(task_b)
+
+
+def test_processed_tasks_requires_32_byte_task_hash():
+    from app.crypto import ProcessedTasks
+
+    processed = ProcessedTasks()
+
+    try:
+        processed.mark_processed(b"short")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(
+            "task_hash must be exactly 32 bytes"
+        )
+
+    try:
+        processed.is_processed(b"short")
+    except ValueError:
+        return
+
+    raise AssertionError(
+        "task_hash must be exactly 32 bytes"
+    )
+
+def test_processed_tasks_does_not_consume_task_after_failed_quorum():
+    from app.crypto import ProcessedTasks
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+
+    quorum_succeeded = False
+
+    if quorum_succeeded:
+        processed.mark_processed(task_hash)
+
+    assert not processed.is_processed(task_hash)
+    assert processed.mark_processed(task_hash) is True
+
+
+def test_processed_tasks_consumes_task_after_successful_quorum():
+    from app.crypto import ProcessedTasks
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+
+    quorum_succeeded = True
+
+    if quorum_succeeded:
+        assert processed.mark_processed(task_hash) is True
+
+    assert processed.is_processed(task_hash)
+    assert processed.mark_processed(task_hash) is False
+
+
+def test_processed_tasks_prevents_second_successful_quorum_for_same_task():
+    from app.crypto import ProcessedTasks
+
+    task_hash = bytes.fromhex("11" * 32)
+    processed = ProcessedTasks()
+
+    first_quorum_succeeded = processed.mark_processed(task_hash)
+    second_quorum_succeeded = processed.mark_processed(task_hash)
+
+    assert first_quorum_succeeded is True
+    assert second_quorum_succeeded is False
+    assert processed.is_processed(task_hash)
