@@ -4348,3 +4348,76 @@ def test_atomic_validator_bundle_fails_closed_if_result_binding_raises(
     )
 
     assert not processed_tasks.is_processed(task_hash)
+
+
+def test_processed_tasks_concurrent_mark_allows_only_one_acceptance():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.crypto import ProcessedTasks
+
+    processed_tasks = ProcessedTasks()
+    task_hash = bytes.fromhex("d1" * 32)
+
+    def attempt_mark(_):
+        return processed_tasks.mark_processed(task_hash)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(attempt_mark, range(2)))
+
+    assert sorted(results) == [False, True]
+    assert processed_tasks.is_processed(task_hash)
+
+
+def test_processed_tasks_concurrent_mark_never_allows_duplicate_credit():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.crypto import ProcessedTasks
+
+    processed_tasks = ProcessedTasks()
+    task_hash = bytes.fromhex("d2" * 32)
+
+    attempts = 20
+
+    def attempt_mark(_):
+        return processed_tasks.mark_processed(task_hash)
+
+    with ThreadPoolExecutor(max_workers=attempts) as executor:
+        results = list(executor.map(attempt_mark, range(attempts)))
+
+    assert sum(results) == 1
+    assert processed_tasks.is_processed(task_hash)
+
+
+def test_atomic_validator_acceptance_final_mark_remains_single_winner():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.crypto import (
+        ProcessedTasks,
+        verify_and_accept_validator_attestation_bundle_for_result,
+    )
+
+    (
+        attestations,
+        result,
+        report_data,
+        registry,
+        task_hash,
+    ) = _make_valid_result_bundle_for_atomic_acceptance()
+
+    processed_tasks = ProcessedTasks()
+
+    def attempt_accept():
+        return verify_and_accept_validator_attestation_bundle_for_result(
+            attestations=attestations,
+            result=result,
+            report_data=report_data,
+            registry=registry,
+            threshold=2 / 3,
+            processed_tasks=processed_tasks,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: attempt_accept(), range(2)))
+
+    assert sorted(results) == [False, True]
+    assert processed_tasks.is_processed(task_hash)
