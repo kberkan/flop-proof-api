@@ -624,3 +624,27 @@ def verify_and_accept_validator_attestation_quorum(
         return False
 
     return processed_tasks.mark_processed(task_hash)
+
+
+def verify_validator_attestation_report_data(
+    attestation: ValidatorAttestation,
+    report_data: str,
+) -> bool:
+    """Verify that report_data matches the attestation's committed claims."""
+    if not isinstance(report_data, str):
+        return False
+
+    try:
+        expected_report_data = compute_report_data(
+            task_hash=attestation.task_hash,
+            gn_weight=attestation.gn_weight.to_bytes(8, "little"),
+            latency_ms=attestation.latency_ms.to_bytes(8, "little"),
+            model_hash=attestation.model_hash,
+            output_hash=attestation.output_hash,
+            decode_policy_hash=attestation.decode_policy_hash,
+            tee_type=attestation.tee_type.to_bytes(1, "little"),
+        )
+    except (ValueError, OverflowError):
+        return False
+
+    return report_data == expected_report_data

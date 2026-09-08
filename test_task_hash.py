@@ -1851,3 +1851,250 @@ def test_report_data_changes_when_output_hash_changes():
     )
 
     assert first != second
+
+
+def test_validator_attestation_report_data_matches_claims():
+    from app.crypto import (
+        ValidatorAttestation,
+        compute_report_data,
+        verify_validator_attestation_report_data,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([4]) * 32)
+    keypair = (validator_id, secret_key)
+
+    from app.crypto import sign_validator_attestation
+
+    signature = sign_validator_attestation(
+        keypair=keypair,
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    assert verify_validator_attestation_report_data(
+        attestation=attestation,
+        report_data=report_data,
+    ) is True
+
+
+def test_validator_attestation_report_data_rejects_wrong_task_hash():
+    from app.crypto import (
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_validator_attestation_report_data,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([5]) * 32)
+    signature = sign_validator_attestation(
+        keypair=(validator_id, secret_key),
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    wrong_report_data = compute_report_data(
+        task_hash=bytes.fromhex("aa" * 32),
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    assert verify_validator_attestation_report_data(
+        attestation=attestation,
+        report_data=wrong_report_data,
+    ) is False
+
+
+def test_validator_attestation_report_data_rejects_wrong_model_hash():
+    from app.crypto import (
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_validator_attestation_report_data,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([6]) * 32)
+    signature = sign_validator_attestation(
+        keypair=(validator_id, secret_key),
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    wrong_report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=bytes.fromhex("bb" * 32),
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    assert verify_validator_attestation_report_data(
+        attestation=attestation,
+        report_data=wrong_report_data,
+    ) is False
+
+
+def test_validator_attestation_report_data_rejects_wrong_output_hash():
+    from app.crypto import (
+        ValidatorAttestation,
+        compute_report_data,
+        sign_validator_attestation,
+        verify_validator_attestation_report_data,
+    )
+    import sr25519
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    validator_id, secret_key = sr25519.pair_from_seed(bytes([7]) * 32)
+    signature = sign_validator_attestation(
+        keypair=(validator_id, secret_key),
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=100,
+        latency_ms=25,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    wrong_report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(100).to_bytes(8, "little"),
+        latency_ms=(25).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=bytes.fromhex("cc" * 32),
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    assert verify_validator_attestation_report_data(
+        attestation=attestation,
+        report_data=wrong_report_data,
+    ) is False
