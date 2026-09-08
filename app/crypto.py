@@ -743,3 +743,43 @@ def verify_and_accept_validator_attestation_bundle(
         return False
 
     return processed_tasks.mark_processed(task_hash)
+
+
+def validator_attestation_matches_result(
+    attestation: ValidatorAttestation,
+    result: dict,
+) -> bool:
+    """Check that validator attestation claims match result metadata."""
+    if not isinstance(result, dict):
+        return False
+
+    hash_fields = (
+        "task_hash",
+        "model_hash",
+        "output_hash",
+        "decode_policy_hash",
+    )
+
+    for field in hash_fields:
+        value = result.get(field)
+
+        if not isinstance(value, str):
+            return False
+
+        try:
+            if bytes.fromhex(value) != getattr(attestation, field):
+                return False
+        except ValueError:
+            return False
+
+    numeric_fields = (
+        "gn_weight",
+        "latency_ms",
+        "tee_type",
+    )
+
+    for field in numeric_fields:
+        if result.get(field) != getattr(attestation, field):
+            return False
+
+    return True
