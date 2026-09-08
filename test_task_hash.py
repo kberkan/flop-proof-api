@@ -827,3 +827,122 @@ def test_validator_attestation_signable_payload_uses_expected_field_order():
 
     assert payload == expected
     assert len(payload) == 179
+
+def test_validator_quorum_uses_active_validator_count():
+    from app.crypto import calculate_validator_quorum
+
+    # 5 active validators, 2/3 threshold:
+    # ceil(5 * 2/3) = 4
+    assert calculate_validator_quorum(5, 2 / 3) == 4
+
+
+def test_validator_quorum_requires_at_least_one_validator():
+    from app.crypto import calculate_validator_quorum
+
+    assert calculate_validator_quorum(0, 2 / 3) == 1
+
+
+def test_validator_quorum_does_not_use_attestation_count_as_denominator():
+    from app.crypto import calculate_validator_quorum
+
+    # 5 active validators remain the denominator.
+    # Three matching attestations are only 3/5, so quorum is still 4.
+    assert calculate_validator_quorum(5, 2 / 3) == 4
+
+
+def test_validator_quorum_rejects_duplicate_validator_ids():
+    from app.crypto import has_distinct_validator_ids
+
+    validator_a = bytes.fromhex("11" * 32)
+    validator_b = bytes.fromhex("22" * 32)
+
+    assert has_distinct_validator_ids(
+        [validator_a, validator_b]
+    )
+
+    assert not has_distinct_validator_ids(
+        [validator_a, validator_a]
+    )
+
+
+def test_validator_quorum_requires_matching_signed_fields():
+    from app.crypto import validator_attestation_fields_match
+
+    base = dict(
+        task_hash=bytes.fromhex("11" * 32),
+        gn_weight=100,
+        latency_ms=200,
+        model_hash=bytes.fromhex("22" * 32),
+        output_hash=bytes.fromhex("33" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=7,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("55" * 32),
+    )
+
+    same = dict(base)
+    different = dict(base)
+    different["output_hash"] = bytes.fromhex("66" * 32)
+
+    assert validator_attestation_fields_match(base, same)
+    assert not validator_attestation_fields_match(base, different)
+
+def test_validator_quorum_ceil_behavior_for_active_validator_counts():
+    from app.crypto import calculate_validator_quorum
+
+    expected = {
+        1: 1,
+        2: 2,
+        3: 2,
+        4: 3,
+        5: 4,
+        6: 4,
+    }
+
+    for active_count, quorum in expected.items():
+        assert calculate_validator_quorum(
+            active_count,
+            2 / 3,
+        ) == quorum
+
+
+def test_validator_quorum_rejects_invalid_thresholds():
+    from app.crypto import calculate_validator_quorum
+
+    for threshold in (0, -0.1, 1.1, 2):
+        try:
+            calculate_validator_quorum(5, threshold)
+        except ValueError:
+            continue
+
+        raise AssertionError(
+            f"threshold={threshold} must be rejected"
+        )
+
+
+def test_validator_quorum_rejects_negative_active_validator_count():
+    from app.crypto import calculate_validator_quorum
+
+    try:
+        calculate_validator_quorum(-1, 2 / 3)
+    except ValueError:
+        return
+
+    raise AssertionError(
+        "negative active validator count must be rejected"
+    )
+
+
+def test_validator_quorum_accepts_exact_threshold_boundary():
+    from app.crypto import calculate_validator_quorum
+
+    # 3 active validators at 2/3 requires exactly 2.
+    assert calculate_validator_quorum(3, 2 / 3) == 2
+
+
+def test_validator_quorum_rounds_fractional_requirement_up():
+    from app.crypto import calculate_validator_quorum
+
+    # 5 * 2/3 = 3.333..., therefore 4 are required.
+    assert calculate_validator_quorum(5, 2 / 3) == 4

@@ -64,6 +64,58 @@ class ValidatorAttestation:
             raise ValueError("event_log_verified must be a bool")
 
 
+def calculate_validator_quorum(
+    active_validator_count: int,
+    threshold: float,
+) -> int:
+    """Calculate the minimum attestation quorum from active validators."""
+    if not isinstance(active_validator_count, int):
+        raise ValueError("active_validator_count must be an integer")
+    if active_validator_count < 0:
+        raise ValueError("active_validator_count cannot be negative")
+    if not isinstance(threshold, (int, float)):
+        raise ValueError("threshold must be numeric")
+    if not 0 < threshold <= 1:
+        raise ValueError("threshold must be greater than 0 and at most 1")
+
+    numerator, denominator = threshold.as_integer_ratio()
+    required = (
+        active_validator_count * numerator + denominator - 1
+    ) // denominator
+
+    return max(1, required)
+
+
+def has_distinct_validator_ids(validator_ids: list[bytes]) -> bool:
+    """Return whether every validator ID in a bundle is unique."""
+    return len(validator_ids) == len(set(validator_ids))
+
+
+_VALIDATOR_ATTESTATION_SIGNED_FIELDS = (
+    "task_hash",
+    "gn_weight",
+    "latency_ms",
+    "model_hash",
+    "output_hash",
+    "decode_policy_hash",
+    "tee_type",
+    "quote_verified",
+    "event_log_verified",
+    "hardware_id_hash",
+)
+
+
+def validator_attestation_fields_match(
+    left: dict,
+    right: dict,
+) -> bool:
+    """Compare the named signed ValidatorAttestation fields only."""
+    return all(
+        left.get(field) == right.get(field)
+        for field in _VALIDATOR_ATTESTATION_SIGNED_FIELDS
+    )
+
+
 def compute_task_hash(
     agent: bytes,
     nonce: bytes,
