@@ -201,6 +201,22 @@ class FlopProofClient:
             f"/proofs/{proof_id}",
         )
 
+
+    def accept_proof_validator_attestations(
+        self,
+        proof_id: str,
+        report_data: str,
+        attestations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/proofs/{proof_id}/validator-attestations/accept",
+            json={
+                "report_data": report_data,
+                "attestations": attestations,
+            },
+        )
+
     def verify_proof(
         self,
         proof_id: str,

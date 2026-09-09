@@ -97,3 +97,73 @@ def test_signed_sdk_e2e():
         assert check["payload_hash_valid"] is True
         assert check["canonical_valid"] is True
         assert check["signature_valid"] is True
+
+def test_accept_proof_validator_attestations():
+    client = FlopProofClient(
+        "http://127.0.0.1:8000",
+        api_key="test-key",
+    )
+
+    captured = {}
+
+    def fake_request(method, path, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["kwargs"] = kwargs
+        return {
+            "accepted": True,
+            "proof_id": "proof_test",
+            "task_hash": "11" * 32,
+            "validators": 2,
+            "result_event_id": "event_test",
+        }
+
+    client._request = fake_request
+
+    attestations = [
+        {
+            "task_hash": "11" * 32,
+            "gn_weight": 1,
+            "latency_ms": 123,
+            "model_hash": "22" * 32,
+            "output_hash": "33" * 32,
+            "decode_policy_hash": "44" * 32,
+            "tee_type": 1,
+            "quote_verified": True,
+            "event_log_verified": True,
+            "hardware_id_hash": "55" * 32,
+            "validator_id": "66" * 32,
+            "signature": "77" * 64,
+        },
+        {
+            "task_hash": "11" * 32,
+            "gn_weight": 1,
+            "latency_ms": 123,
+            "model_hash": "22" * 32,
+            "output_hash": "33" * 32,
+            "decode_policy_hash": "44" * 32,
+            "tee_type": 1,
+            "quote_verified": True,
+            "event_log_verified": True,
+            "hardware_id_hash": "55" * 32,
+            "validator_id": "88" * 32,
+            "signature": "99" * 64,
+        },
+    ]
+
+    response = client.accept_proof_validator_attestations(
+        proof_id="proof_test",
+        report_data="aa" * 32,
+        attestations=attestations,
+    )
+
+    assert response["accepted"] is True
+    assert response["proof_id"] == "proof_test"
+    assert response["validators"] == 2
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/proofs/proof_test/validator-attestations/accept"
+    assert captured["kwargs"]["json"] == {
+        "report_data": "aa" * 32,
+        "attestations": attestations,
+    }
