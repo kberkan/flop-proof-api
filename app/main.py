@@ -26,7 +26,10 @@ from .crypto import (
 )
 from .database import Base, engine, get_db
 from .events import create_event
-from .schemas import ValidatorAttestationAcceptRequest
+from .schemas import (
+    ProofValidatorAttestationAcceptRequest,
+    ValidatorAttestationAcceptRequest,
+)
 from .models import Proof, ProofEvent
 from .schemas import EventCreate, ProofCreate
 from .rate_limit import RateLimiter
@@ -122,6 +125,123 @@ processed_validator_tasks = ProcessedTasks()
 VALIDATOR_ATTESTATION_THRESHOLD = Fraction(
     os.getenv("FLOP_VALIDATOR_THRESHOLD", "2/3")
 )
+
+
+@app.post("/proofs/{proof_id}/validator-attestations/accept")
+def accept_proof_validator_attestations(
+    proof_id: str,
+    request: ProofValidatorAttestationAcceptRequest,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
+):
+    """Accept validator attestations bound to a stored result.created event."""
+
+    proof = db.scalar(
+        select(Proof).where(Proof.proof_id == proof_id)
+    )
+
+    if proof is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Proof not found",
+        )
+
+    result_event = db.scalar(
+        select(ProofEvent)
+        .where(
+            ProofEvent.proof_id == proof_id,
+            ProofEvent.event_type == "result.created",
+        )
+        .order_by(ProofEvent.sequence.desc())
+    )
+
+    if result_event is None:
+        raise HTTPException(
+            status_code=409,
+            detail="result.created event not found",
+        )
+
+    try:
+        result = json.loads(result_event.payload_json)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=409,
+            detail="Invalid result.created payload",
+        ) from None
+
+    if not isinstance(result, dict):
+        raise HTTPException(
+            status_code=409,
+            detail="Invalid result.created payload",
+        )
+
+    required_fields = (
+        "task_hash",
+        "model_hash",
+        "gn_weight",
+        "latency_ms",
+        "decode_policy_hash",
+        "tee_type",
+        "output_hash",
+    )
+
+    if any(field not in result for field in required_fields):
+        raise HTTPException(
+            status_code=409,
+            detail="result.created is not validator-ready",
+        )
+
+    try:
+        attestations = [
+            ValidatorAttestation(
+                task_hash=bytes.fromhex(attestation.task_hash),
+                gn_weight=attestation.gn_weight,
+                latency_ms=attestation.latency_ms,
+                model_hash=bytes.fromhex(attestation.model_hash),
+                output_hash=bytes.fromhex(attestation.output_hash),
+                decode_policy_hash=bytes.fromhex(attestation.decode_policy_hash),
+                tee_type=attestation.tee_type,
+                quote_verified=attestation.quote_verified,
+                event_log_verified=attestation.event_log_verified,
+                hardware_id_hash=bytes.fromhex(attestation.hardware_id_hash),
+                validator_id=bytes.fromhex(attestation.validator_id),
+                signature=base64.b64decode(
+                    attestation.signature
+                    + "=" * (-len(attestation.signature) % 4),
+                    altchars=b"-_",
+                    validate=True,
+                ),
+            )
+            for attestation in request.attestations
+        ]
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid validator attestation encoding",
+        ) from None
+
+    accepted = verify_and_accept_validator_attestation_bundle_for_result(
+        attestations=attestations,
+        result=result,
+        report_data=request.report_data,
+        registry=validator_registry,
+        threshold=VALIDATOR_ATTESTATION_THRESHOLD,
+        processed_tasks=processed_validator_tasks,
+    )
+
+    if not accepted:
+        raise HTTPException(
+            status_code=409,
+            detail="Validator attestation bundle rejected",
+        )
+
+    return {
+        "accepted": True,
+        "proof_id": proof_id,
+        "task_hash": attestations[0].task_hash.hex(),
+        "validators": len(attestations),
+        "result_event_id": result_event.event_id,
+    }
 
 
 @app.post("/validator-attestations/accept")

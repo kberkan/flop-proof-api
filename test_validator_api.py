@@ -712,3 +712,434 @@ def test_validator_attestation_endpoint_is_single_winner_under_concurrency(
 
     assert statuses.count(200) == 1
     assert statuses.count(409) == 7
+
+
+def test_proof_validator_attestation_requires_result_created(monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry([]),
+    )
+    monkeypatch.setattr(
+        main,
+        "processed_validator_tasks",
+        main.ProcessedTasks(),
+    )
+
+    response = client.post(
+        "/proofs/proof-that-does-not-exist/validator-attestations/accept",
+        json={
+            "report_data": "00" * 32,
+            "attestations": [],
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_proof_validator_attestation_accepts_bound_result(monkeypatch):
+    import base64
+    import hashlib
+    import uuid
+    import sr25519
+
+    from app import main
+    from app.crypto import compute_task_hash, compute_report_data, generate_test_keypair, public_key_to_test_did, sign_validator_attestation
+    from client import FlopProofClient
+
+    api_client = FlopProofClient(
+        "http://127.0.0.1:8000",
+        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+    )
+
+    private_key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+
+    nonce = f"validator-proof-{uuid.uuid4().hex}"
+
+    created = api_client.create_signed_proof(
+        private_key=private_key,
+        did=did,
+        text="validator proof integration",
+        room="validator-proof-room",
+        nonce=nonce,
+        request_id=f"validator-proof-{uuid.uuid4().hex}",
+        created_at="2026-09-08T20:00:00Z",
+    )
+
+    assert created["proof_id"]
+
+    proof_id = created["proof_id"]
+
+    task_agent = bytes.fromhex("aa" * 32)
+    task_nonce = b"validator-proof-task"
+    model_hash = bytes.fromhex("11" * 32)
+    task_payload_hash = bytes.fromhex("22" * 32)
+    commit_hash = bytes.fromhex("33" * 32)
+
+    task_hash = compute_task_hash(
+        agent=task_agent,
+        nonce=task_nonce,
+        model_hash=model_hash,
+        payload_hash=task_payload_hash,
+        commit_hash=commit_hash,
+    )
+
+    content = "validator-bound result"
+    content_hash = f"sha256:{hashlib.sha256(content.encode()).hexdigest()}"
+
+    result_payload = {
+        "content": content,
+        "content_hash": content_hash,
+        "task_hash": task_hash,
+        "task_hash_inputs": {
+            "agent": task_agent.hex(),
+            "nonce": task_nonce.hex(),
+            "model_hash": model_hash.hex(),
+            "payload_hash": task_payload_hash.hex(),
+            "commit_hash": commit_hash.hex(),
+        },
+        "model_hash": model_hash.hex(),
+        "gn_weight": 1,
+        "latency_ms": 123,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": 1,
+        "output_hash": "55" * 32,
+    }
+
+    api_client.append_signed_event(
+        proof_id=proof_id,
+        private_key=private_key,
+        did=did,
+        event_type="result.created",
+        payload=result_payload,
+        nonce=nonce + "-result",
+    )
+
+    validator_keys = [
+        sr25519.pair_from_seed(bytes([7]) * 32),
+        sr25519.pair_from_seed(bytes([8]) * 32),
+        sr25519.pair_from_seed(bytes([9]) * 32),
+    ]
+
+    task_hash_bytes = bytes.fromhex(task_hash)
+    output_hash = bytes.fromhex("55" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("55" * 32)
+
+    attestations = []
+
+    for validator_id, validator_private in validator_keys[:2]:
+        signature = sign_validator_attestation(
+            keypair=(validator_id, validator_private),
+            task_hash=task_hash_bytes,
+            gn_weight=1,
+            latency_ms=123,
+            model_hash=model_hash,
+            output_hash=output_hash,
+            decode_policy_hash=decode_policy_hash,
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=hardware_id_hash,
+        )
+
+        attestations.append(
+            {
+                "task_hash": task_hash,
+                "gn_weight": 1,
+                "latency_ms": 123,
+                "model_hash": model_hash.hex(),
+                "output_hash": output_hash.hex(),
+                "decode_policy_hash": decode_policy_hash.hex(),
+                "tee_type": 1,
+                "quote_verified": True,
+                "event_log_verified": True,
+                "hardware_id_hash": hardware_id_hash.hex(),
+                "validator_id": validator_id.hex(),
+                "signature": base64.urlsafe_b64encode(signature).rstrip(b"=").decode(),
+            }
+        )
+
+    report_data = compute_report_data(
+        task_hash=task_hash_bytes,
+        gn_weight=(1).to_bytes(8, "little"),
+        latency_ms=(123).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry(
+            [validator_id for validator_id, _ in validator_keys]
+        ),
+    )
+    monkeypatch.setattr(
+        main,
+        "processed_validator_tasks",
+        main.ProcessedTasks(),
+    )
+
+    response = client.post(
+        f"/proofs/{proof_id}/validator-attestations/accept",
+        json={
+            "report_data": report_data,
+            "attestations": attestations,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["accepted"] is True
+    assert response.json()["proof_id"] == proof_id
+    assert response.json()["validators"] == 2
+
+def test_proof_validator_attestation_rejects_missing_result_created(monkeypatch):
+    from app import main
+    import uuid
+
+    api_client = __import__("client", fromlist=["FlopProofClient"]).FlopProofClient(
+        "http://127.0.0.1:8000",
+        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+    )
+
+    from app.crypto import generate_test_keypair, public_key_to_test_did
+    private_key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+
+    created = api_client.create_signed_proof(
+        private_key=private_key,
+        did=did,
+        text="no result event",
+        room="validator-negative",
+        nonce=f"negative-{uuid.uuid4().hex}",
+        request_id=f"negative-{uuid.uuid4().hex}",
+        created_at="2026-09-08T20:00:00Z",
+    )
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry([]),
+    )
+    monkeypatch.setattr(
+        main,
+        "processed_validator_tasks",
+        main.ProcessedTasks(),
+    )
+
+    response = client.post(
+        f"/proofs/{created['proof_id']}/validator-attestations/accept",
+        json={
+            "report_data": "00" * 32,
+            "attestations": [],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "result.created event not found"
+
+
+def test_proof_validator_attestation_rejects_incomplete_result(monkeypatch):
+    from app import main
+    import uuid
+
+    api_client = __import__("client", fromlist=["FlopProofClient"]).FlopProofClient(
+        "http://127.0.0.1:8000",
+        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+    )
+
+    from app.crypto import generate_test_keypair, public_key_to_test_did
+    private_key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+
+    nonce = f"incomplete-{uuid.uuid4().hex}"
+
+    created = api_client.create_signed_proof(
+        private_key=private_key,
+        did=did,
+        text="incomplete result",
+        room="validator-negative",
+        nonce=nonce,
+        request_id=f"incomplete-{uuid.uuid4().hex}",
+        created_at="2026-09-08T20:00:00Z",
+    )
+
+    api_client.append_signed_event(
+        proof_id=created["proof_id"],
+        private_key=private_key,
+        did=did,
+        event_type="result.created",
+        payload={
+            "task_hash": "11" * 32,
+            "model_hash": "22" * 32,
+            "gn_weight": 1,
+            "latency_ms": 123,
+            "decode_policy_hash": "33" * 32,
+            "tee_type": 1,
+        },
+        nonce=nonce + "-result",
+    )
+
+    response = client.post(
+        f"/proofs/{created['proof_id']}/validator-attestations/accept",
+        json={
+            "report_data": "00" * 32,
+            "attestations": [],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "result.created is not validator-ready"
+
+
+def test_proof_validator_attestation_rejects_result_attestation_mismatch(monkeypatch):
+    import base64
+    import uuid
+    import sr25519
+
+    from app import main
+    from app.crypto import (
+        compute_report_data,
+        compute_task_hash,
+        sign_validator_attestation,
+    )
+
+    api_client = __import__("client", fromlist=["FlopProofClient"]).FlopProofClient(
+        "http://127.0.0.1:8000",
+        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+    )
+
+    from app.crypto import generate_test_keypair, public_key_to_test_did
+    private_key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+
+    nonce = f"mismatch-{uuid.uuid4().hex}"
+
+    created = api_client.create_signed_proof(
+        private_key=private_key,
+        did=did,
+        text="mismatch result",
+        room="validator-negative",
+        nonce=nonce,
+        request_id=f"mismatch-{uuid.uuid4().hex}",
+        created_at="2026-09-08T20:00:00Z",
+    )
+
+    task_agent = bytes.fromhex("aa" * 32)
+    task_nonce = b"mismatch-task"
+    model_hash = bytes.fromhex("11" * 32)
+    task_payload_hash = bytes.fromhex("22" * 32)
+    commit_hash = bytes.fromhex("33" * 32)
+
+    task_hash = compute_task_hash(
+        agent=task_agent,
+        nonce=task_nonce,
+        model_hash=model_hash,
+        payload_hash=task_payload_hash,
+        commit_hash=commit_hash,
+    )
+
+    result_payload = {
+        "content": "bound result",
+        "content_hash": "sha256:" + ("44" * 32),
+        "task_hash": task_hash,
+        "task_hash_inputs": {
+            "agent": task_agent.hex(),
+            "nonce": task_nonce.hex(),
+            "model_hash": model_hash.hex(),
+            "payload_hash": task_payload_hash.hex(),
+            "commit_hash": commit_hash.hex(),
+        },
+        "model_hash": model_hash.hex(),
+        "gn_weight": 1,
+        "latency_ms": 123,
+        "decode_policy_hash": "55" * 32,
+        "tee_type": 1,
+        "output_hash": "66" * 32,
+    }
+
+    api_client.append_signed_event(
+        proof_id=created["proof_id"],
+        private_key=private_key,
+        did=did,
+        event_type="result.created",
+        payload=result_payload,
+        nonce=nonce + "-result",
+    )
+
+    validator_id, validator_private = sr25519.pair_from_seed(bytes([7]) * 32)
+
+    # Sign an attestation whose output_hash deliberately differs
+    # from the stored result.created output_hash.
+    attestation_output_hash = bytes.fromhex("77" * 32)
+
+    signature = sign_validator_attestation(
+        keypair=(validator_id, validator_private),
+        task_hash=bytes.fromhex(task_hash),
+        gn_weight=1,
+        latency_ms=123,
+        model_hash=model_hash,
+        output_hash=attestation_output_hash,
+        decode_policy_hash=bytes.fromhex("55" * 32),
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=bytes.fromhex("88" * 32),
+    )
+
+    attestations = [
+        {
+            "task_hash": task_hash,
+            "gn_weight": 1,
+            "latency_ms": 123,
+            "model_hash": model_hash.hex(),
+            "output_hash": attestation_output_hash.hex(),
+            "decode_policy_hash": "55" * 32,
+            "tee_type": 1,
+            "quote_verified": True,
+            "event_log_verified": True,
+            "hardware_id_hash": "88" * 32,
+            "validator_id": validator_id.hex(),
+            "signature": base64.urlsafe_b64encode(signature)
+            .rstrip(b"=")
+            .decode(),
+        }
+    ]
+
+    report_data = compute_report_data(
+        task_hash=bytes.fromhex(task_hash),
+        gn_weight=(1).to_bytes(8, "little"),
+        latency_ms=(123).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=attestation_output_hash,
+        decode_policy_hash=bytes.fromhex("55" * 32),
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry([validator_id]),
+    )
+    monkeypatch.setattr(
+        main,
+        "processed_validator_tasks",
+        main.ProcessedTasks(),
+    )
+
+    response = client.post(
+        f"/proofs/{created['proof_id']}/validator-attestations/accept",
+        json={
+            "report_data": report_data,
+            "attestations": attestations,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Validator attestation bundle rejected"
