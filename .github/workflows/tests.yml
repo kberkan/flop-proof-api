@@ -28,6 +28,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Initialize test database
+        run: |
+          python - <<'PYINIT'
+          from app.database import Base, engine
+          import app.models
+
+          Base.metadata.create_all(bind=engine)
+          print("Test database schema initialized.")
+          PYINIT
+
       - name: Start API server
         run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/flop-uvicorn.log 2>&1 &
