@@ -863,6 +863,12 @@ def verify_validator_attestation_bundle_for_result(
     ):
         return False
 
+    if not validate_gn_latency_throughput_tripwire(
+        result["gn_weight"],
+        result["latency_ms"],
+    ):
+        return False
+
     return True
 
 
@@ -909,11 +915,18 @@ def verify_and_accept_validator_attestation_bundle_for_result(
     ):
         return False
 
-    # 4. Replay check happens only after all verification has succeeded.
+    # 4. Reject implausible G_n/latency claims before replay consumption.
+    if not validate_gn_latency_throughput_tripwire(
+        result["gn_weight"],
+        result["latency_ms"],
+    ):
+        return False
+
+    # 5. Replay check happens only after all verification has succeeded.
     task_hash = attestations[0].task_hash
 
     if processed_tasks.is_processed(task_hash):
         return False
 
-    # 5. The only state mutation is the final acceptance operation.
+    # 6. The only state mutation is the final acceptance operation.
     return processed_tasks.mark_processed(task_hash)
