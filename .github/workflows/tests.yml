@@ -31,12 +31,37 @@ jobs:
       - name: Start API server
         run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/flop-uvicorn.log 2>&1 &
+          API_PID=$!
+
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:8000/health; then
+              echo
+              echo "API server is ready."
               break
             fi
+
+            if ! kill -0 "$API_PID" 2>/dev/null; then
+              echo "API server exited before becoming ready."
+              echo "===== /tmp/flop-uvicorn.log ====="
+              cat /tmp/flop-uvicorn.log
+              exit 1
+            fi
+
             sleep 1
           done
 
+          if ! curl -fsS http://127.0.0.1:8000/health > /dev/null; then
+            echo "API server did not become ready within 30 seconds."
+            echo "===== /tmp/flop-uvicorn.log ====="
+            cat /tmp/flop-uvicorn.log
+            exit 1
+          fi
+
       - name: Run tests
         run: pytest -q
+
+      - name: Show API server log
+        if: always()
+        run: |
+          echo "===== /tmp/flop-uvicorn.log ====="
+          cat /tmp/flop-uvicorn.log || true
