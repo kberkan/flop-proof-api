@@ -46,7 +46,22 @@ const endpoints = [
   {
     method: "GET",
     path: "/proofs/{proof_id}/verify",
-    description: "Cryptographically verify a proof",
+    description: "Verify proof integrity and cryptographic signatures",
+  },
+  {
+    method: "POST",
+    path: "/validator-attestations/accept",
+    description: "Accept and bind validator attestation evidence",
+  },
+  {
+    method: "POST",
+    path: "/proofs/{proof_id}/validator-attestations/accept",
+    description: "Accept and bind validator evidence to a stored proof",
+  },
+  {
+    method: "POST",
+    path: "/stark-batches",
+    description: "Accept STARK evidence for pending verification",
   },
 ];
 
@@ -61,6 +76,33 @@ const createExample = `curl -X POST http://localhost:8000/proofs \\
   }'`;
 
 const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify`;
+
+const evidenceBoundary = [
+  {
+    endpoint: "/proofs/{proof_id}/verify",
+    proves: "The stored proof event chain and its cryptographic integrity.",
+    doesNotProve:
+      "Real model execution, TEE attestation, STARK verification, runtime settlement, or FLOP reward credit.",
+  },
+  {
+    endpoint: "/validator-attestations/accept",
+    proves: "Validator-attestation structure, signatures, field agreement and API-side acceptance.",
+    doesNotProve:
+      "Underlying TEE/DCAP verification, execution verification, runtime settlement, or reward credit.",
+  },
+  {
+    endpoint: "/proofs/{proof_id}/validator-attestations/accept",
+    proves: "Validator evidence bound to the specified stored proof and accepted at the API boundary.",
+    doesNotProve:
+      "Underlying hardware attestation, execution verification, runtime settlement, or reward credit.",
+  },
+  {
+    endpoint: "/stark-batches",
+    proves: "STARK evidence was accepted into a pending API-side verification record.",
+    doesNotProve:
+      "That the STARK proof was cryptographically verified, execution was verified, or runtime settlement occurred.",
+  },
+];
 
 const pythonExample = `from flop_proof_sdk import FlopProofClient
 
@@ -275,6 +317,49 @@ export default function DeveloperPage() {
           </div>
 
           <CodeBlock>{pythonExample}</CodeBlock>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+          <div className="flex items-center gap-3">
+            <ShieldCheck size={18} />
+            <div>
+              <h2 className="font-medium">Evidence boundary</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                API acceptance is not execution verification or runtime settlement.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {evidenceBoundary.map((item) => (
+              <div
+                key={item.endpoint}
+                className="rounded-xl border border-white/[0.06] bg-black/20 p-4"
+              >
+                <code className="font-mono text-xs text-slate-200">
+                  {item.endpoint}
+                </code>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-400">
+                      Proves
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      {item.proves}
+                    </p>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-amber-400">
+                      Does not prove
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      {item.doesNotProve}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="mt-8 grid gap-8 lg:grid-cols-2">
