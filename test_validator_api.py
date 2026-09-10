@@ -1345,3 +1345,360 @@ def test_proof_validator_attestation_replay_survives_memory_reset(monkeypatch):
     assert replay_response.json()["detail"] == (
         "Validator attestation bundle rejected"
     )
+
+# Phase 5 throughput tripwire tests
+
+def test_validator_attestation_throughput_tripwire_accepts_exact_boundary(monkeypatch):
+    from app import main
+
+    validators, common, _ = make_validator_bundle()
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry(
+            [validator["validator_id"] for validator in validators]
+        ),
+    )
+    monkeypatch.setattr(main, "processed_validator_tasks", main.ProcessedTasks())
+
+    gn_weight = 2_000_000
+    latency_ms = 1000
+
+    attestations = []
+    for validator in validators[:2]:
+        signature = sign_validator_attestation(
+            keypair=(validator["validator_id"], validator["private_key"]),
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight,
+            latency_ms=latency_ms,
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"],
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=common["hardware_id_hash"],
+        )
+        attestations.append({
+            **common,
+            "gn_weight": gn_weight,
+            "latency_ms": latency_ms,
+            "validator_id": validator["validator_id"],
+            "signature": signature,
+        })
+
+    result = {
+        "task_hash": common["task_hash"].hex(),
+        "gn_weight": gn_weight,
+        "latency_ms": latency_ms,
+        "model_hash": common["model_hash"].hex(),
+        "output_hash": common["output_hash"].hex(),
+        "decode_policy_hash": common["decode_policy_hash"].hex(),
+        "tee_type": common["tee_type"],
+    }
+
+    import base64
+
+    encoded = []
+    for attestation in attestations:
+        item = {
+            key: value.hex() if isinstance(value, bytes) else value
+            for key, value in attestation.items()
+            if key != "private_key"
+        }
+        item["signature"] = (
+            base64.urlsafe_b64encode(attestation["signature"])
+            .rstrip(b"=")
+            .decode()
+        )
+        encoded.append(item)
+
+    report_data = main.sha256_bytes(
+        common["task_hash"]
+        + gn_weight.to_bytes(8, "little")
+        + latency_ms.to_bytes(8, "little")
+        + common["model_hash"]
+        + common["output_hash"]
+        + common["decode_policy_hash"]
+        + common["tee_type"].to_bytes(1, "little")
+    )
+
+    response = client.post(
+        "/validator-attestations/accept",
+        json={
+            "result": result,
+            "report_data": report_data,
+            "attestations": encoded,
+        },
+    )
+
+    assert response.status_code == 200
+
+
+def test_validator_attestation_throughput_tripwire_rejects_above_boundary(monkeypatch):
+    from app import main
+
+    validators, common, _ = make_validator_bundle()
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry(
+            [validator["validator_id"] for validator in validators]
+        ),
+    )
+    monkeypatch.setattr(main, "processed_validator_tasks", main.ProcessedTasks())
+
+    gn_weight = 2_000_001
+    latency_ms = 1000
+
+    attestations = []
+    for validator in validators[:2]:
+        signature = sign_validator_attestation(
+            keypair=(validator["validator_id"], validator["private_key"]),
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight,
+            latency_ms=latency_ms,
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"],
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=common["hardware_id_hash"],
+        )
+        attestations.append({
+            **common,
+            "gn_weight": gn_weight,
+            "latency_ms": latency_ms,
+            "validator_id": validator["validator_id"],
+            "signature": signature,
+        })
+
+    result = {
+        "task_hash": common["task_hash"].hex(),
+        "gn_weight": gn_weight,
+        "latency_ms": latency_ms,
+        "model_hash": common["model_hash"].hex(),
+        "output_hash": common["output_hash"].hex(),
+        "decode_policy_hash": common["decode_policy_hash"].hex(),
+        "tee_type": common["tee_type"],
+    }
+
+    import base64
+
+    encoded = []
+    for attestation in attestations:
+        item = {
+            key: value.hex() if isinstance(value, bytes) else value
+            for key, value in attestation.items()
+            if key != "private_key"
+        }
+        item["signature"] = (
+            base64.urlsafe_b64encode(attestation["signature"])
+            .rstrip(b"=")
+            .decode()
+        )
+        encoded.append(item)
+
+    report_data = main.sha256_bytes(
+        common["task_hash"]
+        + gn_weight.to_bytes(8, "little")
+        + latency_ms.to_bytes(8, "little")
+        + common["model_hash"]
+        + common["output_hash"]
+        + common["decode_policy_hash"]
+        + common["tee_type"].to_bytes(1, "little")
+    )
+
+    response = client.post(
+        "/validator-attestations/accept",
+        json={
+            "result": result,
+            "report_data": report_data,
+            "attestations": encoded,
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_validator_attestation_throughput_tripwire_rejects_zero_latency(monkeypatch):
+    from app import main
+
+    validators, common, _ = make_validator_bundle()
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry(
+            [validator["validator_id"] for validator in validators]
+        ),
+    )
+    monkeypatch.setattr(main, "processed_validator_tasks", main.ProcessedTasks())
+
+    gn_weight = 1
+    latency_ms = 0
+
+    attestations = []
+    for validator in validators[:2]:
+        signature = sign_validator_attestation(
+            keypair=(validator["validator_id"], validator["private_key"]),
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight,
+            latency_ms=latency_ms,
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"],
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=common["hardware_id_hash"],
+        )
+        attestations.append({
+            **common,
+            "gn_weight": gn_weight,
+            "latency_ms": latency_ms,
+            "validator_id": validator["validator_id"],
+            "signature": signature,
+        })
+
+    result = {
+        "task_hash": common["task_hash"].hex(),
+        "gn_weight": gn_weight,
+        "latency_ms": latency_ms,
+        "model_hash": common["model_hash"].hex(),
+        "output_hash": common["output_hash"].hex(),
+        "decode_policy_hash": common["decode_policy_hash"].hex(),
+        "tee_type": common["tee_type"],
+    }
+
+    import base64
+
+    encoded = []
+    for attestation in attestations:
+        item = {
+            key: value.hex() if isinstance(value, bytes) else value
+            for key, value in attestation.items()
+            if key != "private_key"
+        }
+        item["signature"] = (
+            base64.urlsafe_b64encode(attestation["signature"])
+            .rstrip(b"=")
+            .decode()
+        )
+        encoded.append(item)
+
+    report_data = main.sha256_bytes(
+        common["task_hash"]
+        + gn_weight.to_bytes(8, "little")
+        + latency_ms.to_bytes(8, "little")
+        + common["model_hash"]
+        + common["output_hash"]
+        + common["decode_policy_hash"]
+        + common["tee_type"].to_bytes(1, "little")
+    )
+
+    response = client.post(
+        "/validator-attestations/accept",
+        json={
+            "result": result,
+            "report_data": report_data,
+            "attestations": encoded,
+        },
+    )
+
+    assert response.status_code == 409
+
+
+def test_validator_attestation_tripwire_rejection_does_not_consume_task(monkeypatch):
+    from app import main
+
+    validators, common, _ = make_validator_bundle()
+
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry(
+            [validator["validator_id"] for validator in validators]
+        ),
+    )
+
+    processed = main.ProcessedTasks()
+    monkeypatch.setattr(main, "processed_validator_tasks", processed)
+
+    gn_weight = 2_000_001
+    latency_ms = 1000
+
+    attestations = []
+    for validator in validators[:2]:
+        signature = sign_validator_attestation(
+            keypair=(validator["validator_id"], validator["private_key"]),
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight,
+            latency_ms=latency_ms,
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"],
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=common["hardware_id_hash"],
+        )
+        attestations.append({
+            **common,
+            "gn_weight": gn_weight,
+            "latency_ms": latency_ms,
+            "validator_id": validator["validator_id"],
+            "signature": signature,
+        })
+
+    result = {
+        "task_hash": common["task_hash"].hex(),
+        "gn_weight": gn_weight,
+        "latency_ms": latency_ms,
+        "model_hash": common["model_hash"].hex(),
+        "output_hash": common["output_hash"].hex(),
+        "decode_policy_hash": common["decode_policy_hash"].hex(),
+        "tee_type": common["tee_type"],
+    }
+
+    import base64
+
+    encoded = []
+    for attestation in attestations:
+        item = {
+            key: value.hex() if isinstance(value, bytes) else value
+            for key, value in attestation.items()
+            if key != "private_key"
+        }
+        item["signature"] = (
+            base64.urlsafe_b64encode(attestation["signature"])
+            .rstrip(b"=")
+            .decode()
+        )
+        encoded.append(item)
+
+    report_data = main.sha256_bytes(
+        common["task_hash"]
+        + gn_weight.to_bytes(8, "little")
+        + latency_ms.to_bytes(8, "little")
+        + common["model_hash"]
+        + common["output_hash"]
+        + common["decode_policy_hash"]
+        + common["tee_type"].to_bytes(1, "little")
+    )
+
+    response = client.post(
+        "/validator-attestations/accept",
+        json={
+            "result": result,
+            "report_data": report_data,
+            "attestations": encoded,
+        },
+    )
+
+    assert response.status_code == 409
+    assert not processed.is_processed(common["task_hash"])
+

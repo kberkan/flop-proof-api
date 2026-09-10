@@ -202,6 +202,28 @@ def validator_attestation_fields_match(
     )
 
 
+THROUGHPUT_TRIPWIRE_GFLOPS_PER_SEC = 2_000_000
+
+
+def validate_gn_latency_throughput_tripwire(
+    gn_weight: int,
+    latency_ms: int,
+) -> bool:
+    """Reject implausible G_n/latency claims using the protocol tripwire.
+
+    This validates an externally supplied claim; it does not compute G_n.
+    """
+    if not isinstance(gn_weight, int) or gn_weight < 0:
+        return False
+
+    if not isinstance(latency_ms, int) or latency_ms <= 0:
+        return False
+
+    return (
+        gn_weight * 1000
+        <= THROUGHPUT_TRIPWIRE_GFLOPS_PER_SEC * latency_ms
+    )
+
 def verify_validator_attestation_quorum(
     attestations: list[ValidatorAttestation],
     registry: ValidatorRegistry,

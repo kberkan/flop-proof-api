@@ -139,7 +139,7 @@ Current implementation matches the specified task-hash construction.
 | latency_ms = miner_done_ms - miner_recv_ms | 🔴 | HIGH | No execution timing calculation |
 | VerifiedTurn timing transcript | 🔴 | HIGH | Not implemented |
 | V3 timing leaf binding | 🔴 | HIGH | Not implemented |
-| Latency-based G_n enforcement | 🔴 | HIGH | No G_n meter/tripwire |
+| Latency-based G_n enforcement | 🟡 | HIGH | API-side reject-only throughput tripwire implemented; canonical G_n meter remains GAP |
 
 **Safe wording:** validator-signed latency claim is bound/validated.
 # 10. STARK / PendingVerification

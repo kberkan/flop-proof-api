@@ -24,6 +24,7 @@ from .crypto import (
     verify_floop_signature,
     verify_and_accept_validator_attestation_bundle_for_result,
     verify_validator_attestation_bundle_for_result,
+    validate_gn_latency_throughput_tripwire,
 )
 from .replay import claim_processed_task
 from .database import Base, engine, get_db
@@ -340,6 +341,15 @@ def accept_validator_attestations(
             422,
             detail="Invalid validator attestation encoding",
         ) from None
+
+    if not validate_gn_latency_throughput_tripwire(
+        request.result["gn_weight"],
+        request.result["latency_ms"],
+    ):
+        raise HTTPException(
+            409,
+            detail="Validator attestation bundle rejected: throughput tripwire",
+        )
 
     accepted = verify_and_accept_validator_attestation_bundle_for_result(
         attestations=attestations,
