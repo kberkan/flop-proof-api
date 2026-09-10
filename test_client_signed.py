@@ -7,7 +7,7 @@ from app.crypto import (
     generate_test_keypair,
     public_key_to_test_did,
 )
-from client import FlopProofClient
+from flop_proof_sdk.client import FlopProofClient
 
 
 def test_signed_sdk_e2e():
@@ -97,6 +97,100 @@ def test_signed_sdk_e2e():
         assert check["payload_hash_valid"] is True
         assert check["canonical_valid"] is True
         assert check["signature_valid"] is True
+
+def test_accept_validator_attestation_preserves_evidence_contract():
+    client = FlopProofClient("http://127.0.0.1:8000", api_key="test-key")
+
+    captured = {}
+
+    def fake_request(method, path, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["kwargs"] = kwargs
+        return {
+            "accepted": True,
+            "task_hash": "11" * 32,
+            "validators": 2,
+            "evidence": {
+                "class": "validator_attestation_binding",
+                "execution_verified": False,
+                "runtime_settled": False,
+            },
+        }
+
+    client._request = fake_request
+
+    attestations = [
+        {"validator_id": "22" * 32},
+        {"validator_id": "33" * 32},
+    ]
+
+    response = client.accept_validator_attestation(
+        report_data="aa" * 32,
+        attestations=attestations,
+    )
+
+    assert response["accepted"] is True
+    assert response["task_hash"] == "11" * 32
+    assert response["validators"] == 2
+    assert response["evidence"]["class"] == "validator_attestation_binding"
+    assert response["evidence"]["execution_verified"] is False
+    assert response["evidence"]["runtime_settled"] is False
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/validator-attestations/accept"
+    assert captured["kwargs"]["json"] == {
+        "report_data": "aa" * 32,
+        "attestations": attestations,
+    }
+
+
+def test_submit_stark_evidence_preserves_pending_evidence_contract():
+    client = FlopProofClient("http://127.0.0.1:8000", api_key="test-key")
+
+    captured = {}
+
+    def fake_request(method, path, **kwargs):
+        captured["method"] = method
+        captured["path"] = path
+        captured["kwargs"] = kwargs
+        return {
+            "accepted": True,
+            "proof_verified": False,
+            "verification_status": "pending",
+            "task_hash": "44" * 32,
+            "evidence": {
+                "class": "stark_evidence_pending",
+                "execution_verified": False,
+                "runtime_settled": False,
+            },
+        }
+
+    client._request = fake_request
+
+    proofs = [
+        {
+            "task_hash": "44" * 32,
+            "proof": {"dummy": "stark-evidence"},
+        }
+    ]
+
+    response = client.submit_stark_evidence(proofs=proofs)
+
+    assert response["accepted"] is True
+    assert response["proof_verified"] is False
+    assert response["verification_status"] == "pending"
+    assert response["task_hash"] == "44" * 32
+    assert response["evidence"]["class"] == "stark_evidence_pending"
+    assert response["evidence"]["execution_verified"] is False
+    assert response["evidence"]["runtime_settled"] is False
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/stark-batches"
+    assert captured["kwargs"]["json"] == {
+        "proofs": proofs,
+    }
+
 
 def test_accept_proof_validator_attestations():
     client = FlopProofClient(

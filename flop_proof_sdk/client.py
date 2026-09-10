@@ -217,6 +217,46 @@ class FlopProofClient:
             },
         )
 
+    def accept_validator_attestation(
+        self,
+        report_data: str,
+        attestations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Accept validator-attestation evidence at the API boundary.
+
+        This method exposes API-side attestation validation and acceptance.
+        It does not imply real execution verification or runtime settlement.
+        The response evidence fields are returned unchanged.
+        """
+        return self._request(
+            "POST",
+            "/validator-attestations/accept",
+            json={
+                "report_data": report_data,
+                "attestations": attestations,
+            },
+        )
+
+    def submit_stark_evidence(
+        self,
+        proofs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Submit STARK evidence for pending API-side verification.
+
+        This method performs evidence intake only. The current API response
+        uses proof_verified=false and verification_status="pending".
+        It does not imply STARK verification, execution verification,
+        runtime settlement, or reward credit.
+        The response evidence fields are returned unchanged.
+        """
+        return self._request(
+            "POST",
+            "/stark-batches",
+            json={
+                "proofs": proofs,
+            },
+        )
+
     def verify_proof(
         self,
         proof_id: str,
