@@ -20,6 +20,7 @@ include = ["flop_proof_sdk*"]
 testpaths = [
     "test_verifier.py",
     "test_task_hash.py",
+    "test_stark_batch_api.py",
     "test_api_contract.py",
     "test_client_errors.py",
     "test_client_signed.py",

@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import uuid
 
 from app.crypto import (
     generate_test_keypair,
@@ -33,7 +34,7 @@ def main():
     private_key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
 
-    nonce = "client-sdk-nonce"
+    nonce = f"client-sdk-nonce-{uuid.uuid4().hex}"
     text = "proof created through Python SDK"
     canonical = f"client-sdk|{nonce}|{text}"
     signature = sign_message(
@@ -42,7 +43,7 @@ def main():
     )
 
     request = {
-        "request_id": "client-sdk-request",
+        "request_id": f"client-sdk-request-{uuid.uuid4().hex}",
         "from_did": did,
         "text": text,
         "created_at": "2026-09-04T20:30:00Z",
@@ -59,6 +60,7 @@ def main():
     print(f"   Proof: {proof_id}")
 
     def append_event(event_type, payload):
+        event_nonce = f"client-sdk-event-{uuid.uuid4().hex}"
         event_canonical = (
             f"{proof_id}|{event_type}|{payload_hash(payload)}"
         )
@@ -72,7 +74,7 @@ def main():
             "actor_did": did,
             "payload": payload,
             "signature": {
-                "nonce": nonce,
+                "nonce": event_nonce,
                 "sig": event_signature,
                 "canonical": event_canonical,
             },

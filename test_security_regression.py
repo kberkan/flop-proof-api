@@ -219,3 +219,8 @@ def test_verify_endpoint_returns_verification_result():
 
     assert "verdict" in data
     assert data["verdict"] == "valid"
+
+    # Evidence Status Contract v0.1.
+    assert data["evidence"]["class"] == "proof_integrity_verified"
+    assert data["evidence"]["execution_verified"] is False
+    assert data["evidence"]["runtime_settled"] is False

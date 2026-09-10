@@ -4421,3 +4421,85 @@ def test_atomic_validator_acceptance_final_mark_remains_single_winner():
 
     assert sorted(results) == [False, True]
     assert processed_tasks.is_processed(task_hash)
+
+
+def test_validator_attestation_bundle_for_result_validation_only():
+    from app.crypto import (
+        MockValidatorRegistry,
+        ValidatorAttestation,
+        encode_validator_attestation_signable_payload,
+        verify_validator_attestation_bundle_for_result,
+    )
+    import sr25519
+
+    seed = bytes.fromhex("66" * 32)
+    public_key, private_key = sr25519.pair_from_seed(seed)
+    validator_id = public_key
+
+    task_hash = bytes.fromhex("11" * 32)
+    model_hash = bytes.fromhex("22" * 32)
+    output_hash = bytes.fromhex("33" * 32)
+    decode_policy_hash = bytes.fromhex("44" * 32)
+    hardware_id_hash = bytes.fromhex("77" * 32)
+
+    signed_payload = encode_validator_attestation_signable_payload(
+        task_hash=task_hash,
+        gn_weight=10,
+        latency_ms=20,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+    )
+
+    signature = sr25519.sign((public_key, private_key), signed_payload)
+
+    attestation = ValidatorAttestation(
+        task_hash=task_hash,
+        gn_weight=10,
+        latency_ms=20,
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=1,
+        quote_verified=True,
+        event_log_verified=True,
+        hardware_id_hash=hardware_id_hash,
+        validator_id=validator_id,
+        signature=signature,
+    )
+
+    result = {
+        "task_hash": task_hash.hex(),
+        "model_hash": model_hash.hex(),
+        "output_hash": output_hash.hex(),
+        "decode_policy_hash": decode_policy_hash.hex(),
+        "gn_weight": 10,
+        "latency_ms": 20,
+        "tee_type": 1,
+    }
+
+    from app.crypto import compute_report_data
+
+    report_data = compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(10).to_bytes(8, "little"),
+        latency_ms=(20).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    registry = MockValidatorRegistry([validator_id])
+
+    assert verify_validator_attestation_bundle_for_result(
+        attestations=[attestation],
+        result=result,
+        report_data=report_data,
+        registry=registry,
+        threshold=1,
+    ) is True

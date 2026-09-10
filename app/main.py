@@ -23,20 +23,22 @@ from .crypto import (
     verify_canonical_signature,
     verify_floop_signature,
     verify_and_accept_validator_attestation_bundle_for_result,
+    verify_validator_attestation_bundle_for_result,
 )
+from .replay import claim_processed_task
 from .database import Base, engine, get_db
 from .events import create_event
 from .schemas import (
     ProofValidatorAttestationAcceptRequest,
     ValidatorAttestationAcceptRequest,
+    StarkBatchSubmitRequest,
 )
-from .models import Proof, ProofEvent
+from .models import PendingVerification, Proof, ProofEvent
 from .schemas import EventCreate, ProofCreate
 from .rate_limit import RateLimiter
 
 load_dotenv()
 
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="FLOP Proof API",
@@ -220,16 +222,21 @@ def accept_proof_validator_attestations(
             detail="Invalid validator attestation encoding",
         ) from None
 
-    accepted = verify_and_accept_validator_attestation_bundle_for_result(
+    validated = verify_validator_attestation_bundle_for_result(
         attestations=attestations,
         result=result,
         report_data=request.report_data,
         registry=validator_registry,
         threshold=VALIDATOR_ATTESTATION_THRESHOLD,
-        processed_tasks=processed_validator_tasks,
     )
 
-    if not accepted:
+    if not validated:
+        raise HTTPException(
+            status_code=409,
+            detail="Validator attestation bundle rejected",
+        )
+
+    if not claim_processed_task(db, attestations[0].task_hash):
         raise HTTPException(
             status_code=409,
             detail="Validator attestation bundle rejected",
@@ -241,8 +248,64 @@ def accept_proof_validator_attestations(
         "task_hash": attestations[0].task_hash.hex(),
         "validators": len(attestations),
         "result_event_id": result_event.event_id,
+        "evidence": {
+            "class": "validator_attestation_binding",
+            "execution_verified": False,
+            "runtime_settled": False,
+        },
     }
 
+
+
+@app.post("/stark-batches")
+def submit_stark_batch(
+    payload: StarkBatchSubmitRequest,
+    db: Session = Depends(get_db),
+):
+    task_hash = payload.task_hash.lower()
+
+    existing = db.get(PendingVerification, task_hash)
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="task_hash already submitted",
+        )
+
+    pending = PendingVerification(
+        task_hash=task_hash,
+        proofs_json=json.dumps(
+            payload.proofs,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        gn_weight=payload.gn_weight,
+        latency_ms=payload.latency_ms,
+        model_hash=payload.model_hash.lower(),
+        output_hash=payload.output_hash.lower(),
+    )
+
+    db.add(pending)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="task_hash already submitted",
+        )
+
+    return {
+        "accepted": True,
+        "proof_verified": False,
+        "verification_status": "pending",
+        "task_hash": task_hash,
+        "evidence": {
+            "class": "stark_evidence_pending",
+            "execution_verified": False,
+            "runtime_settled": False,
+        },
+    }
 
 @app.post("/validator-attestations/accept")
 def accept_validator_attestations(
@@ -297,6 +360,11 @@ def accept_validator_attestations(
         "accepted": True,
         "task_hash": attestations[0].task_hash.hex(),
         "validators": len(attestations),
+        "evidence": {
+            "class": "validator_attestation_binding",
+            "execution_verified": False,
+            "runtime_settled": False,
+        },
     }
 
 
@@ -779,7 +847,15 @@ def verify_proof(
         for event in db_events
     ]
 
-    return verify_proof_events(
+    verification = verify_proof_events(
         proof_id=proof_id,
         events=events,
     )
+
+    verification["evidence"] = {
+        "class": "proof_integrity_verified",
+        "execution_verified": False,
+        "runtime_settled": False,
+    }
+
+    return verification

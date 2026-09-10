@@ -214,8 +214,22 @@ def test_validator_attestation_endpoint_accepts_two_of_three_validators(monkeypa
     )
 
     assert response.status_code == 200
-    assert response.json()["accepted"] is True
-    assert response.json()["validators"] == 2
+
+    body = response.json()
+
+    assert body["accepted"] is True
+    assert body["validators"] == 2
+
+    # Evidence Status Contract v0.1.
+    assert body["evidence"]["class"] == "validator_attestation_binding"
+    assert body["evidence"]["execution_verified"] is False
+    assert body["evidence"]["runtime_settled"] is False
+
+    # Contract lock:
+    # attestation acceptance is not protocol settlement/crediting.
+    assert "settled" not in body
+    assert "credited" not in body
+    assert body.get("verified") is not True
 
 
 def test_validator_attestation_endpoint_rejects_result_binding_mismatch(monkeypatch):
@@ -774,7 +788,7 @@ def test_proof_validator_attestation_accepts_bound_result(monkeypatch):
     proof_id = created["proof_id"]
 
     task_agent = bytes.fromhex("aa" * 32)
-    task_nonce = b"validator-proof-task"
+    task_nonce = f"validator-proof-task-{uuid.uuid4().hex}".encode()
     model_hash = bytes.fromhex("11" * 32)
     task_payload_hash = bytes.fromhex("22" * 32)
     commit_hash = bytes.fromhex("33" * 32)
@@ -1143,3 +1157,191 @@ def test_proof_validator_attestation_rejects_result_attestation_mismatch(monkeyp
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Validator attestation bundle rejected"
+
+
+def test_proof_validator_attestation_replay_survives_memory_reset(monkeypatch):
+    import base64
+    import hashlib
+    import uuid
+    import sr25519
+
+    from app import main
+    from app.crypto import (
+        compute_report_data,
+        compute_task_hash,
+        generate_test_keypair,
+        public_key_to_test_did,
+        sign_validator_attestation,
+    )
+    from client import FlopProofClient
+
+    api_client = FlopProofClient(
+        "http://127.0.0.1:8000",
+        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+    )
+
+    private_key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+    nonce = f"persistent-replay-{uuid.uuid4().hex}"
+
+    created = api_client.create_signed_proof(
+        private_key=private_key,
+        did=did,
+        text="persistent replay test",
+        room="validator-persistent-replay",
+        nonce=nonce,
+        request_id=f"persistent-replay-{uuid.uuid4().hex}",
+        created_at="2026-09-08T20:00:00Z",
+    )
+
+    proof_id = created["proof_id"]
+
+    task_hash = compute_task_hash(
+        agent=bytes.fromhex("aa" * 32),
+        nonce=f"persistent-replay-task-{uuid.uuid4().hex}".encode(),
+        model_hash=bytes.fromhex("11" * 32),
+        payload_hash=bytes.fromhex("22" * 32),
+        commit_hash=bytes.fromhex("33" * 32),
+    )
+
+    result_payload = {
+        "content": "persistent replay result",
+        "content_hash": "sha256:" + hashlib.sha256(
+            b"persistent replay result"
+        ).hexdigest(),
+        "task_hash": task_hash,
+        "task_hash_inputs": {
+            "agent": "aa" * 32,
+            "nonce": b"persistent-replay-task".hex(),
+            "model_hash": "11" * 32,
+            "payload_hash": "22" * 32,
+            "commit_hash": "33" * 32,
+        },
+        "model_hash": "11" * 32,
+        "gn_weight": 1,
+        "latency_ms": 123,
+        "decode_policy_hash": "44" * 32,
+        "tee_type": 1,
+        "output_hash": "55" * 32,
+    }
+
+    api_client.append_signed_event(
+        proof_id=proof_id,
+        private_key=private_key,
+        did=did,
+        event_type="result.created",
+        payload=result_payload,
+        nonce=nonce + "-result",
+    )
+
+    validator_keys = [
+        sr25519.pair_from_seed(bytes([7]) * 32),
+        sr25519.pair_from_seed(bytes([8]) * 32),
+        sr25519.pair_from_seed(bytes([9]) * 32),
+    ]
+
+    validator_ids = [validator_id for validator_id, _ in validator_keys]
+    monkeypatch.setattr(
+        main,
+        "validator_registry",
+        main.MockValidatorRegistry(validator_ids),
+    )
+    monkeypatch.setattr(
+        main,
+        "processed_validator_tasks",
+        main.ProcessedTasks(),
+    )
+
+    attestations = []
+
+    for validator_id, validator_private in validator_keys[:2]:
+        signature = sign_validator_attestation(
+            keypair=(validator_id, validator_private),
+            task_hash=bytes.fromhex(task_hash),
+            gn_weight=1,
+            latency_ms=123,
+            model_hash=bytes.fromhex("11" * 32),
+            output_hash=bytes.fromhex("55" * 32),
+            decode_policy_hash=bytes.fromhex("44" * 32),
+            tee_type=1,
+            quote_verified=True,
+            event_log_verified=True,
+            hardware_id_hash=bytes.fromhex("66" * 32),
+        )
+
+        attestations.append(
+            {
+                "task_hash": task_hash,
+                "gn_weight": 1,
+                "latency_ms": 123,
+                "model_hash": "11" * 32,
+                "output_hash": "55" * 32,
+                "decode_policy_hash": "44" * 32,
+                "tee_type": 1,
+                "quote_verified": True,
+                "event_log_verified": True,
+                "hardware_id_hash": "66" * 32,
+                "validator_id": validator_id.hex(),
+                "signature": base64.urlsafe_b64encode(signature)
+                .rstrip(b"=")
+                .decode(),
+            }
+        )
+
+    report_data = compute_report_data(
+        task_hash=bytes.fromhex(task_hash),
+        gn_weight=(1).to_bytes(8, "little"),
+        latency_ms=(123).to_bytes(8, "little"),
+        model_hash=bytes.fromhex("11" * 32),
+        output_hash=bytes.fromhex("55" * 32),
+        decode_policy_hash=bytes.fromhex("44" * 32),
+        tee_type=(1).to_bytes(1, "little"),
+    )
+
+    payload = {
+        "report_data": report_data,
+        "attestations": attestations,
+    }
+
+    first_response = client.post(
+        f"/proofs/{proof_id}/validator-attestations/accept",
+        json=payload,
+    )
+
+    assert first_response.status_code == 200
+
+    body = first_response.json()
+
+    assert body["accepted"] is True
+    assert body["proof_id"] == proof_id
+    assert body["task_hash"] == task_hash
+    assert body["validators"] == 2
+    assert body["result_event_id"]
+
+    # Evidence Status Contract v0.1.
+    assert body["evidence"]["class"] == "validator_attestation_binding"
+    assert body["evidence"]["execution_verified"] is False
+    assert body["evidence"]["runtime_settled"] is False
+
+    # Contract lock:
+    # stored-proof attestation acceptance is not protocol settlement/crediting.
+    assert "settled" not in body
+    assert "credited" not in body
+    assert body.get("verified") is not True
+
+    # Simulate a fresh application process: the in-memory replay store is gone.
+    monkeypatch.setattr(
+        main,
+        "processed_validator_tasks",
+        main.ProcessedTasks(),
+    )
+
+    replay_response = client.post(
+        f"/proofs/{proof_id}/validator-attestations/accept",
+        json=payload,
+    )
+
+    assert replay_response.status_code == 409
+    assert replay_response.json()["detail"] == (
+        "Validator attestation bundle rejected"
+    )

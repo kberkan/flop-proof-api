@@ -2,6 +2,7 @@ import base64
 import hashlib
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Protocol
 
 import json
 
@@ -65,6 +66,19 @@ class ValidatorAttestation:
             raise ValueError("event_log_verified must be a bool")
 
 
+class ValidatorRegistry(Protocol):
+    """Source of the currently active validator set."""
+
+    def active_validator_ids(self) -> tuple[bytes, ...]:
+        ...
+
+    def active_validator_count(self) -> int:
+        ...
+
+    def is_active(self, validator_id: bytes) -> bool:
+        ...
+
+
 @dataclass(frozen=True)
 class MockValidatorRegistry:
     """Local/test-only source of active validator membership."""
@@ -113,6 +127,13 @@ class ProcessedTasks:
     def is_processed(self, task_hash: bytes) -> bool:
         self._validate_task_hash(task_hash)
         return task_hash in self._processed
+
+    def claim(self, task_hash: bytes) -> bool:
+        self._validate_task_hash(task_hash)
+        if task_hash in self._processed:
+            return False
+        self._processed.add(task_hash)
+        return True
 
     def mark_processed(self, task_hash: bytes) -> bool:
         self._validate_task_hash(task_hash)
@@ -183,10 +204,10 @@ def validator_attestation_fields_match(
 
 def verify_validator_attestation_quorum(
     attestations: list[ValidatorAttestation],
-    registry: MockValidatorRegistry,
+    registry: ValidatorRegistry,
     threshold: float | Fraction,
 ) -> bool:
-    """Verify a ValidatorAttestation bundle against a local validator registry."""
+    """Verify a ValidatorAttestation bundle against an active validator registry."""
     if not attestations:
         return False
 
@@ -603,7 +624,7 @@ def compute_report_data(
 
 def verify_and_accept_validator_attestation_quorum(
     attestations: list[ValidatorAttestation],
-    registry: MockValidatorRegistry,
+    registry: ValidatorRegistry,
     threshold: float | Fraction,
     processed_tasks: ProcessedTasks,
 ) -> bool:
@@ -653,7 +674,7 @@ def verify_validator_attestation_report_data(
 def verify_and_accept_validator_attestation(
     attestation: ValidatorAttestation,
     report_data: str,
-    registry: MockValidatorRegistry,
+    registry: ValidatorRegistry,
     threshold: float | Fraction,
     processed_tasks: ProcessedTasks,
 ) -> bool:
@@ -712,7 +733,7 @@ def encode_validator_attestation_scale(
 def verify_and_accept_validator_attestation_bundle(
     attestations: list[ValidatorAttestation],
     report_data: str,
-    registry: MockValidatorRegistry,
+    registry: ValidatorRegistry,
     threshold: float | Fraction,
     processed_tasks: ProcessedTasks,
 ) -> bool:
@@ -785,11 +806,49 @@ def validator_attestation_matches_result(
     return True
 
 
+
+def verify_validator_attestation_bundle_for_result(
+    attestations: list[ValidatorAttestation],
+    result: dict,
+    report_data: str,
+    registry: ValidatorRegistry,
+    threshold: float | Fraction,
+) -> bool:
+    """Verify result binding, report_data and validator quorum without mutation."""
+    if not attestations:
+        return False
+
+    for attestation in attestations:
+        try:
+            if not validator_attestation_matches_result(
+                attestation=attestation,
+                result=result,
+            ):
+                return False
+        except Exception:
+            return False
+
+    if not verify_validator_attestation_report_data(
+        attestation=attestations[0],
+        report_data=report_data,
+    ):
+        return False
+
+    if not verify_validator_attestation_quorum(
+        attestations=attestations,
+        registry=registry,
+        threshold=threshold,
+    ):
+        return False
+
+    return True
+
+
 def verify_and_accept_validator_attestation_bundle_for_result(
     attestations: list[ValidatorAttestation],
     result: dict,
     report_data: str,
-    registry: MockValidatorRegistry,
+    registry: ValidatorRegistry,
     threshold: float | Fraction,
     processed_tasks: ProcessedTasks,
 ) -> bool:

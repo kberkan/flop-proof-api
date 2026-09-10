@@ -34,3 +34,21 @@ class ProofEvent(Base):
     sequence: Mapped[int] = mapped_column(Integer)
     previous_event_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     nonce: Mapped[str] = mapped_column(String(255), index=True, default="")
+
+
+class PendingVerification(Base):
+    __tablename__ = "pending_verifications"
+
+    task_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    proofs_json: Mapped[str] = mapped_column(Text, nullable=False)
+    gn_weight: Mapped[int] = mapped_column(Integer, nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    model_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class ProcessedTask(Base):
+    __tablename__ = "processed_tasks"
+
+    task_hash: Mapped[bytes] = mapped_column(String(64), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime)

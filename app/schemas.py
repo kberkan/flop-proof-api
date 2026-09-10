@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SignatureSchema(BaseModel):
@@ -43,6 +43,34 @@ class EventCreate(BaseModel):
     actor_did: str = Field(min_length=1)
     payload: dict[str, Any] = Field(default_factory=dict)
     signature: EventSignatureSchema
+
+
+class StarkBatchSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proofs: list[dict[str, Any]] = Field(default_factory=list)
+    gn_weight: int = Field(ge=0, le=2**64 - 1)
+    task_hash: str = Field(min_length=64, max_length=64)
+    latency_ms: int = Field(ge=0, le=2**64 - 1)
+    model_hash: str = Field(min_length=64, max_length=64)
+    output_hash: str = Field(min_length=64, max_length=64)
+
+    @field_validator(
+        "task_hash",
+        "model_hash",
+        "output_hash",
+    )
+    @classmethod
+    def validate_hash_hex(cls, value: str) -> str:
+        try:
+            bytes.fromhex(value)
+        except ValueError as exc:
+            raise ValueError("hash must be valid hexadecimal") from exc
+
+        if len(value) != 64:
+            raise ValueError("hash must represent exactly 32 bytes")
+
+        return value.lower()
 
 
 class ValidatorAttestationSchema(BaseModel):
