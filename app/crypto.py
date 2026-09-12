@@ -18,6 +18,120 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 ED25519_PUB_MULTICODEC = bytes([0xED, 0x01])
 
 
+class DecodePolicyClass:
+    TEXT_GENERATION = 0
+    IMAGE_DENOISE = 1
+    ROLLOUT = 2
+    CONTROL_LOOP = 3
+    OTHER = 4
+
+
+class OutputTransform:
+    IDENTITY = 0
+    TRANSFORM_ID = 1
+
+
+@dataclass(frozen=True)
+class SamplingParams:
+    temperature_milli: int
+    top_p_ppm: int
+    top_k: int
+    repetition_penalty_ppm: int
+    beam_width: int
+    seed: int
+
+
+@dataclass(frozen=True)
+class DecodePolicy:
+    version: int
+    class_tag: int
+    tokenizer_hash: bytes
+    sampling_params: SamplingParams
+    stop_conditions_hash: bytes
+    output_transform: int
+    transform_id: bytes | None
+    class_policy_hash: bytes
+    other_class: int | None = None
+
+
+def _u16_le(value: int, name: str) -> bytes:
+    if not isinstance(value, int) or not 0 <= value <= 2**16 - 1:
+        raise ValueError(f"{name} must be a u16")
+    return value.to_bytes(2, "little")
+
+
+def _u32_le(value: int, name: str) -> bytes:
+    if not isinstance(value, int) or not 0 <= value <= 2**32 - 1:
+        raise ValueError(f"{name} must be a u32")
+    return value.to_bytes(4, "little")
+
+
+def _u64_le(value: int, name: str) -> bytes:
+    if not isinstance(value, int) or not 0 <= value <= 2**64 - 1:
+        raise ValueError(f"{name} must be a u64")
+    return value.to_bytes(8, "little")
+
+
+def _h256(value: bytes, name: str) -> bytes:
+    if not isinstance(value, bytes) or len(value) != 32:
+        raise ValueError(f"{name} must be exactly 32 bytes")
+    return value
+
+
+def encode_sampling_params(params: SamplingParams) -> bytes:
+    """Canonical SCALE encoding of SamplingParams v1."""
+    return (
+        _u32_le(params.temperature_milli, "temperature_milli")
+        + _u32_le(params.top_p_ppm, "top_p_ppm")
+        + _u32_le(params.top_k, "top_k")
+        + _u32_le(params.repetition_penalty_ppm, "repetition_penalty_ppm")
+        + _u16_le(params.beam_width, "beam_width")
+        + _u64_le(params.seed, "seed")
+    )
+
+
+def encode_decode_policy(policy: DecodePolicy) -> bytes:
+    """Canonical SCALE encoding of DecodePolicy v1."""
+    if policy.version != 1:
+        raise ValueError("DecodePolicy version must be 1")
+
+    if not isinstance(policy.class_tag, int) or not 0 <= policy.class_tag <= 4:
+        raise ValueError("class_tag must be in the range 0..4")
+
+    encoded = _u16_le(policy.version, "version")
+
+    if policy.class_tag == DecodePolicyClass.OTHER:
+        encoded += bytes([DecodePolicyClass.OTHER])
+        other_value = policy.other_class
+        if other_value is None:
+            raise ValueError("Other class requires other_class u16")
+        encoded += _u16_le(other_value, "other_class")
+    else:
+        encoded += bytes([policy.class_tag])
+
+    encoded += _h256(policy.tokenizer_hash, "tokenizer_hash")
+    encoded += encode_sampling_params(policy.sampling_params)
+    encoded += _h256(policy.stop_conditions_hash, "stop_conditions_hash")
+
+    if policy.output_transform == OutputTransform.IDENTITY:
+        encoded += bytes([OutputTransform.IDENTITY])
+    elif policy.output_transform == OutputTransform.TRANSFORM_ID:
+        encoded += bytes([OutputTransform.TRANSFORM_ID])
+        encoded += _h256(policy.transform_id, "transform_id")
+    else:
+        raise ValueError("output_transform must be Identity(0) or TransformId(1)")
+
+    encoded += _h256(policy.class_policy_hash, "class_policy_hash")
+    return encoded
+
+
+def compute_decode_policy_hash(policy: DecodePolicy) -> bytes:
+    """Compute canonical FLOP DecodePolicy v1 SHA-256 digest."""
+    return hashlib.sha256(
+        b"FLOP_DECODE_POLICY_HASH_V1" + encode_decode_policy(policy)
+    ).digest()
+
+
 @dataclass(frozen=True)
 class ValidatorAttestation:
     task_hash: bytes

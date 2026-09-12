@@ -4,6 +4,12 @@ import sr25519
 from fastapi.testclient import TestClient
 
 from app.crypto import (
+    DecodePolicy,
+    DecodePolicyClass,
+    OutputTransform,
+    SamplingParams,
+    compute_decode_policy_hash,
+    encode_decode_policy,
     sign_validator_attestation,
     verify_validator_attestation_signature,
 )
@@ -1867,3 +1873,145 @@ def test_validator_attestation_tripwire_rejection_does_not_consume_task(monkeypa
     assert response.status_code == 409
     assert not processed.is_processed(common["task_hash"])
 
+
+
+def test_decode_policy_v1_canonical_encoding_and_hash():
+    policy = DecodePolicy(
+        version=1,
+        class_tag=DecodePolicyClass.TEXT_GENERATION,
+        tokenizer_hash=bytes.fromhex("11" * 32),
+        sampling_params=SamplingParams(
+            temperature_milli=700,
+            top_p_ppm=950000,
+            top_k=40,
+            repetition_penalty_ppm=1100000,
+            beam_width=1,
+            seed=42,
+        ),
+        stop_conditions_hash=bytes.fromhex("22" * 32),
+        output_transform=OutputTransform.IDENTITY,
+        transform_id=None,
+        class_policy_hash=bytes.fromhex("33" * 32),
+    )
+
+    encoded = encode_decode_policy(policy)
+
+    assert encoded[:2] == b"\x01\x00"
+    assert encoded[2] == DecodePolicyClass.TEXT_GENERATION
+    assert len(encoded) == 2 + 1 + 32 + 4 + 4 + 4 + 4 + 2 + 8 + 32 + 1 + 32
+
+    digest_1 = compute_decode_policy_hash(policy)
+    digest_2 = compute_decode_policy_hash(policy)
+
+    assert len(digest_1) == 32
+    assert digest_1 == digest_2
+
+    import hashlib
+
+    expected = hashlib.sha256(
+        b"FLOP_DECODE_POLICY_HASH_V1" + encoded
+    ).digest()
+
+    assert digest_1 == expected
+
+
+def test_decode_policy_v1_transform_id_encoding():
+    policy = DecodePolicy(
+        version=1,
+        class_tag=DecodePolicyClass.IMAGE_DENOISE,
+        tokenizer_hash=bytes.fromhex("11" * 32),
+        sampling_params=SamplingParams(
+            temperature_milli=1000,
+            top_p_ppm=1000000,
+            top_k=0,
+            repetition_penalty_ppm=1000000,
+            beam_width=1,
+            seed=0,
+        ),
+        stop_conditions_hash=bytes.fromhex("22" * 32),
+        output_transform=OutputTransform.TRANSFORM_ID,
+        transform_id=bytes.fromhex("44" * 32),
+        class_policy_hash=bytes.fromhex("33" * 32),
+    )
+
+    encoded = encode_decode_policy(policy)
+
+    # Layout ends with:
+    #   output_transform(1) | transform_id(32) | class_policy_hash(32)
+    assert encoded[-65] == OutputTransform.TRANSFORM_ID
+    assert encoded[-64:-32] == bytes.fromhex("44" * 32)
+    assert encoded[-32:] == bytes.fromhex("33" * 32)
+
+
+def test_decode_policy_v1_other_class_requires_u16():
+    policy = DecodePolicy(
+        version=1,
+        class_tag=DecodePolicyClass.OTHER,
+        tokenizer_hash=bytes.fromhex("11" * 32),
+        sampling_params=SamplingParams(
+            temperature_milli=1,
+            top_p_ppm=2,
+            top_k=3,
+            repetition_penalty_ppm=4,
+            beam_width=5,
+            seed=6,
+        ),
+        stop_conditions_hash=bytes.fromhex("22" * 32),
+        output_transform=OutputTransform.IDENTITY,
+        transform_id=None,
+        class_policy_hash=bytes.fromhex("33" * 32),
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="other_class"):
+        encode_decode_policy(policy)
+
+    policy = DecodePolicy(
+        version=1,
+        class_tag=DecodePolicyClass.OTHER,
+        tokenizer_hash=bytes.fromhex("11" * 32),
+        sampling_params=SamplingParams(
+            temperature_milli=1,
+            top_p_ppm=2,
+            top_k=3,
+            repetition_penalty_ppm=4,
+            beam_width=5,
+            seed=6,
+        ),
+        stop_conditions_hash=bytes.fromhex("22" * 32),
+        output_transform=OutputTransform.IDENTITY,
+        transform_id=None,
+        class_policy_hash=bytes.fromhex("33" * 32),
+        other_class=0x1234,
+    )
+
+    encoded = encode_decode_policy(policy)
+
+    assert encoded[2] == DecodePolicyClass.OTHER
+    assert encoded[3:5] == b"\x34\x12"
+
+
+def test_decode_policy_v1_rejects_invalid_hash_width():
+    policy = DecodePolicy(
+        version=1,
+        class_tag=DecodePolicyClass.TEXT_GENERATION,
+        tokenizer_hash=b"\x11" * 31,
+        sampling_params=SamplingParams(
+            temperature_milli=1,
+            top_p_ppm=2,
+            top_k=3,
+            repetition_penalty_ppm=4,
+            beam_width=5,
+            seed=6,
+        ),
+        stop_conditions_hash=b"\x22" * 32,
+        output_transform=OutputTransform.IDENTITY,
+        transform_id=None,
+        class_policy_hash=b"\x33" * 32,
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="tokenizer_hash"):
+        encode_decode_policy(policy)
