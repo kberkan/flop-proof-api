@@ -163,10 +163,10 @@ Current STARK response deliberately distinguishes evidence intake from verificat
 | gn_weight representation | 🟢 | LOW | Field exists |
 | gn_weight signature binding | 🟢 | LOW | Signed/validated |
 | gn_weight report_data binding | 🟢 | LOW | Included |
-| F_eff computation | 🔴 | HIGH | CAT-3 — canonical runtime metering; Not implemented |
-| G_n = F_eff / 10^9 | 🔴 | HIGH | CAT-3 — canonical runtime metering; Not computed |
-| hp_poui::flop_meter | 🔴 | HIGH | CAT-3 — canonical runtime metering; Official runtime meter is not integrated into this API |
-| Execution-input meter | 🔴 | HIGH | CAT-3 — canonical runtime metering; Required execution-input terms absent |
+| F_eff computation | 🔴 | HIGH | CAT-2/3 — canonical execution-input metering; reference implementation is externally owned and not available in this API repo |
+| G_n = F_eff / 10^9 | 🔴 | HIGH | CAT-2/3 — canonical meter result; API does not compute G_n and only accepts externally supplied evidence |
+| hp_poui::flop_meter | 🔴 | HIGH | CAT-2/3 — canonical meter primitive; normative reference exists, but exact public implementation/KAT source could not be independently retrieved |
+| Execution-input meter | 🔴 | HIGH | CAT-2/3 — canonical execution-input metering; required reference implementation is outside this API boundary |
 | Throughput tripwire | 🟢 | HIGH | CAT-1 API-boundary enforcement; exact spec-derived threshold = 2,000,000 GFLOPS/s (Appendix A / R4.3, D-0405). Runtime settlement gate is a separate CAT-3 concern. |
 | MLPerf ceiling | 🔴 | HIGH | CAT-2/3 — hardware calibration evidence plus runtime enforcement; Not implemented here |
 | Under-report floor | 🔴 | HIGH | CAT-2/3 — execution/work evidence plus runtime metering; Not implemented here |
