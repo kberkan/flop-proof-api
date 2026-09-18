@@ -1915,6 +1915,42 @@ def test_decode_policy_v1_canonical_encoding_and_hash():
     assert digest_1 == expected
 
 
+def test_decode_policy_v1_matches_public_canonical_vector():
+    """Match the public Yellow Paper wire-format-v1 DecodePolicy vector."""
+    policy = DecodePolicy(
+        version=1,
+        class_tag=DecodePolicyClass.TEXT_GENERATION,
+        tokenizer_hash=bytes(32),
+        sampling_params=SamplingParams(
+            temperature_milli=0,
+            top_p_ppm=1_000_000,
+            top_k=0,
+            repetition_penalty_ppm=1_000_000,
+            beam_width=1,
+            seed=0,
+        ),
+        stop_conditions_hash=bytes(32),
+        output_transform=OutputTransform.IDENTITY,
+        transform_id=None,
+        class_policy_hash=bytes(32),
+    )
+
+    expected_encoded = bytes.fromhex(
+        "010000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000040420f000000000040420f000100000000000000"
+        "000000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000000000000000000000000000000000000000"
+    )
+
+    assert len(expected_encoded) == 126
+    assert encode_decode_policy(policy) == expected_encoded
+
+    assert (
+        compute_decode_policy_hash(policy).hex()
+        == "be572af01bd68df9c660da094b7796244dd29435d532c63c9f42efe6bdabd796"
+    )
+
+
 def test_decode_policy_v1_transform_id_encoding():
     policy = DecodePolicy(
         version=1,
