@@ -28,4 +28,9 @@ testpaths = [
     "test_idempotency.py",
     "test_security_regression.py",
     "test_rate_limit_http.py",
+    "test_event_replay.py",
+    "test_persistent_replay.py",
+    "test_processed_task_store.py",
+    "test_validator_api.py",
+    "test_validator_registry.py",
 ]

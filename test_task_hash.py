@@ -32,6 +32,98 @@ def test_task_hash_reference_shape():
     ) == expected
 
 
+def test_task_hash_v1_matches_canonical_wire_vector():
+    from app.crypto import compute_task_hash_v1
+
+    assert compute_task_hash_v1(
+        genesis_hash=bytes.fromhex(
+            "000102030405060708090a0b0c0d0e0f"
+            "101112131415161718191a1b1c1d1e1f"
+        ),
+        agent=bytes.fromhex("11" * 32),
+        nonce=7,
+        model_hash=bytes.fromhex("02" * 32),
+        payload_hash=bytes.fromhex("05" * 32),
+        commit_hash=bytes.fromhex("06" * 32),
+    ) == "8d06cbf826718cda29c2ec2aa363ea13cebc118947eed5fa5d4dbb364357920d"
+
+
+
+def test_task_hash_v1_rejects_invalid_fixed_width_fields():
+    from app.crypto import compute_task_hash_v1
+
+    valid = bytes(32)
+
+    invalid_cases = [
+        ("genesis_hash", b"\\x00" * 31),
+        ("agent", b"\\x11" * 31),
+        ("model_hash", b"\\x22" * 31),
+        ("payload_hash", b"\\x33" * 31),
+        ("commit_hash", b"\\x44" * 31),
+    ]
+
+    values = {
+        "genesis_hash": valid,
+        "agent": valid,
+        "nonce": 0,
+        "model_hash": valid,
+        "payload_hash": valid,
+        "commit_hash": valid,
+    }
+
+    for field, invalid in invalid_cases:
+        case = dict(values)
+        case[field] = invalid
+
+        try:
+            compute_task_hash_v1(**case)
+        except ValueError:
+            continue
+
+        raise AssertionError(f"{field} must be exactly 32 bytes")
+
+
+def test_task_hash_v1_rejects_invalid_nonce():
+    from app.crypto import compute_task_hash_v1
+
+    values = {
+        "genesis_hash": bytes(32),
+        "agent": bytes(32),
+        "model_hash": bytes(32),
+        "payload_hash": bytes(32),
+        "commit_hash": bytes(32),
+    }
+
+    invalid_nonces = [-1, 2**64, 2**64 + 1, True, False, 1.5]
+
+    for nonce in invalid_nonces:
+        try:
+            compute_task_hash_v1(nonce=nonce, **values)
+        except (ValueError, TypeError):
+            continue
+
+        raise AssertionError(f"invalid nonce accepted: {nonce!r}")
+
+
+def test_task_hash_v1_accepts_u64_nonce_boundaries():
+    from app.crypto import compute_task_hash_v1
+
+    values = {
+        "genesis_hash": bytes(32),
+        "agent": bytes(32),
+        "model_hash": bytes(32),
+        "payload_hash": bytes(32),
+        "commit_hash": bytes(32),
+    }
+
+    zero_hash = compute_task_hash_v1(nonce=0, **values)
+    max_hash = compute_task_hash_v1(nonce=2**64 - 1, **values)
+
+    assert len(zero_hash) == 64
+    assert len(max_hash) == 64
+    assert zero_hash != max_hash
+
+
 def test_task_hash_requires_32_byte_agent_and_hashes():
     from app.crypto import compute_task_hash
 
@@ -4503,3 +4595,29 @@ def test_validator_attestation_bundle_for_result_validation_only():
         registry=registry,
         threshold=1,
     ) is True
+
+def test_report_data_matches_canonical_wire_format_v1_vector():
+    from app.crypto import compute_report_data
+
+    task_hash = bytes.fromhex(
+        "8d06cbf826718cda29c2ec2aa363ea13cebc118947eed5fa5d4dbb364357920d"
+    )
+    model_hash = bytes.fromhex("02" * 32)
+    output_hash = bytes.fromhex("03" * 32)
+    decode_policy_hash = bytes.fromhex(
+        "be572af01bd68df9c660da094b7796244dd29435d532c63c9f42efe6bdabd796"
+    )
+
+    expected = (
+        "3165c6d38fbf992485c8c8640476f9a7a5db94523a32387e838d205d178bfff7"
+    )
+
+    assert compute_report_data(
+        task_hash=task_hash,
+        gn_weight=(42).to_bytes(8, "little"),
+        latency_ms=(500).to_bytes(8, "little"),
+        model_hash=model_hash,
+        output_hash=output_hash,
+        decode_policy_hash=decode_policy_hash,
+        tee_type=bytes([0]),
+    ) == expected

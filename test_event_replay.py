@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -9,7 +10,7 @@ from app.main import app
 from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
 
-client = TestClient(app, headers={"X-API-Key": "flop-dev-key-2026"})
+client = TestClient(app, headers={"X-API-Key": os.environ["FLOP_API_KEY"]})
 
 
 def test_exact_event_replay_is_rejected():

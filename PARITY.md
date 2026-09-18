@@ -48,11 +48,15 @@ Internal tests are not external runtime parity evidence.
 
 | Capability | Status | Risk | Evidence |
 |---|---:|---:|---|
-| task_hash construction | 🟢 | LOW | SPEC-CONFORMANT; INTERNALLY TESTED |
-| Task identity binding | 🟢 | LOW | SPEC-CONFORMANT; INTERNALLY TESTED |
+| canonical task_hash v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED |
+| Task identity binding | 🟢 | LOW | API-side hash binding; canonical V1 primitive covered by wire-vector test |
 
-Current implementation is internally tested against the specified task-hash construction.
-External runtime byte-level parity is not independently verified.
+The canonical task_hash v1 construction is implemented and internally
+verified against the public wire-format vector.
+
+Runtime producer/consumer operational binding remains an E.51 runtime-side
+tracking item. External runtime byte-level parity is not independently
+verified.
 
 ## External Parity Classification
 
@@ -333,7 +337,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 177 passed.
+**Current test baseline:** 216 passed.
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
