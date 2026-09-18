@@ -6,6 +6,21 @@ Proje, FLOP protokolünün kanıt/evidence sınırlarıyla uyumlu bir **proof va
 
 > **Scope:** FLOP Proof API bir full FLOP runtime veya settlement runtime değildir. Canonical FLOP runtime metering, execution infrastructure ve on-chain settlement bu API'nin dışında kalır.
 
+## Guarantee Boundary
+
+FLOP Proof API'nin doğruladığı veya kabul ettiği evidence, aşağıdaki runtime garantilerini tek başına sağlamaz:
+
+- Gerçek FLOP runtime execution veya model re-execution garantisi
+- Gerçek TEE/DCAP quote veya event-log verification garantisi
+- Canonical FLOP `F_eff` / `G_n` runtime accounting garantisi
+- TOPLOC veya execution activation garantisi
+- On-chain settlement, payout veya runtime credit garantisi
+- STARK evidence kabulünün STARK proof execution/verification garantisi olduğu iddiası
+- Validator-attestation acceptance sonucunun runtime settlement veya execution verification anlamına geldiği iddiası
+- `accepted=true` sonucunun tek başına execution verification, settlement veya credit anlamına geldiği iddiası
+
+**Test/parity boundary:** `IMPLEMENTED (internal-test-verified)` ifadesi API'nin kendi testleriyle doğrulanan davranışı ifade eder; FLOP runtime ile bağımsız byte-level parity doğrulaması anlamına gelmez. External parity durumu `PARITY.md` içinde ayrıca sınıflandırılır.
+
 ## Features
 
 - Ed25519 signatures
