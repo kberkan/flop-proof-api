@@ -1,10 +1,10 @@
 # FLOP Proof API
 
-FLOP Proof API, agent work ve proof evidence verilerini kriptografik olarak doğrulanabilir yapılar halinde kabul eden, doğrulayan ve bağımsız olarak denetlenebilir proof kayıtları oluşturan bir API ve Python SDK'dır.
+FLOP Proof API is an API and Python SDK for accepting and validating agent work and proof evidence as cryptographically verifiable structures, while producing independently auditable proof records.
 
-Proje, FLOP protokolünün kanıt/evidence sınırlarıyla uyumlu bir **proof validation ve validator-attestation acceptance boundary** sağlar.
+The project provides a **proof validation and validator-attestation acceptance boundary** aligned with the evidence boundaries defined by the FLOP protocol.
 
-> **Scope:** FLOP Proof API bir full FLOP runtime veya settlement runtime değildir. Canonical FLOP runtime metering, execution infrastructure ve on-chain settlement bu API'nin dışında kalır.
+> **Scope:** FLOP Proof API is not the full FLOP runtime or settlement runtime. Canonical FLOP runtime metering, execution infrastructure, and on-chain settlement remain outside this API.
 
 ## Guarantee Boundary
 
