@@ -8,18 +8,18 @@ Proje, FLOP protokolünün kanıt/evidence sınırlarıyla uyumlu bir **proof va
 
 ## Guarantee Boundary
 
-FLOP Proof API'nin doğruladığı veya kabul ettiği evidence, aşağıdaki runtime garantilerini tek başına sağlamaz:
+Evidence accepted or validated by the FLOP Proof API does not, by itself, provide the following runtime guarantees:
 
-- Gerçek FLOP runtime execution veya model re-execution garantisi
-- Gerçek TEE/DCAP quote veya event-log verification garantisi
-- Canonical FLOP `F_eff` / `G_n` runtime accounting garantisi
-- TOPLOC veya execution activation garantisi
-- On-chain settlement, payout veya runtime credit garantisi
-- STARK evidence kabulünün STARK proof execution/verification garantisi olduğu iddiası
-- Validator-attestation acceptance sonucunun runtime settlement veya execution verification anlamına geldiği iddiası
-- `accepted=true` sonucunun tek başına execution verification, settlement veya credit anlamına geldiği iddiası
+- FLOP runtime execution or model re-execution
+- Actual TEE/DCAP quote or event-log verification
+- Canonical FLOP `F_eff` / `G_n` runtime accounting
+- TOPLOC or execution activation
+- On-chain settlement, payout, or runtime credit
+- STARK proof execution or verification merely because STARK evidence was accepted
+- Runtime settlement or execution verification merely because validator attestations were accepted
+- Execution verification, settlement, or credit merely because `accepted=true`
 
-**Test/parity boundary:** `IMPLEMENTED (internal-test-verified)` ifadesi API'nin kendi testleriyle doğrulanan davranışı ifade eder; FLOP runtime ile bağımsız byte-level parity doğrulaması anlamına gelmez. External parity durumu `PARITY.md` içinde ayrıca sınıflandırılır.
+**Test/parity boundary:** `IMPLEMENTED (internal-test-verified)` describes behavior validated by the API's own test suite; it does not mean independently verified byte-level parity with the FLOP runtime. External parity status is classified separately in `PARITY.md`.
 
 ## Features
 
