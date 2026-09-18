@@ -139,7 +139,7 @@ verified.
 | 32-byte representation | 🟢 | LOW | Shape validation |
 | ValidatorAttestation binding | 🟢 | LOW | Signed/bound |
 | Canonical decode-policy object | 🟢 | MEDIUM | CAT-1 — API-boundary implementable; SPEC-CONFORMANT canonical DecodePolicy v1 encoding and hash derivation implemented; INTERNALLY TESTED with canonical encoding, TransformId, Other(u16), and validation tests. |
-| Parameter derivation | 🔴 | HIGH | CAT-1 — API-boundary implementable; canonical SamplingParams encoding is specified, but API derivation is not implemented |
+| Canonical external-parameter derivation | 🔴 | HIGH | CAT-1 — SPEC-GAP; canonical SamplingParams integer encoding is specified, but the Yellow Paper does not define a normative mapping from external float/string inference parameters to those integers. The API must not invent a conversion rule. |
 | Independent execution verification | 🔴 | HIGH | CAT-2/3 — execution plus runtime verification; Not implemented |
 
 **Safe wording:** decode_policy_hash can be derived from the canonical DecodePolicy v1 encoding; runtime/model-registry verification remains outside this API boundary.
