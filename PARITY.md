@@ -337,7 +337,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 184 passed.
+**Current test baseline:** 216 passed.
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
