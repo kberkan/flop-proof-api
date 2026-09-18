@@ -436,6 +436,47 @@ def compute_task_hash(
     ).hexdigest()
 
 
+def compute_task_hash_v1(
+    genesis_hash: bytes,
+    agent: bytes,
+    nonce: int,
+    model_hash: bytes,
+    payload_hash: bytes,
+    commit_hash: bytes,
+) -> str:
+    """Compute the canonical FLOP/POUI task hash v1."""
+    for name, value in (
+        ("genesis_hash", genesis_hash),
+        ("agent", agent),
+        ("model_hash", model_hash),
+        ("payload_hash", payload_hash),
+        ("commit_hash", commit_hash),
+    ):
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
+    if not isinstance(nonce, int) or isinstance(nonce, bool):
+        raise TypeError("nonce must be an integer")
+    if nonce < 0 or nonce > 2**64 - 1:
+        raise ValueError("nonce must fit in u64")
+
+    preimage = (
+        b"FLOP/POUI/TASK"
+        + b"\x01"
+        + genesis_hash
+        + agent
+        + nonce.to_bytes(8, byteorder="little", signed=False)
+        + model_hash
+        + payload_hash
+        + commit_hash
+    )
+
+    return hashlib.blake2b(
+        preimage,
+        digest_size=32,
+    ).hexdigest()
+
+
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
