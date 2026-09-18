@@ -6,9 +6,17 @@
 > It does not claim that this API is the FLOP Network runtime, settlement runtime, TEE verifier, or execution engine.
 
 ## Status Legend
-- 🟢 IMPLEMENTED / PARITY
+- 🟢 IMPLEMENTED (internal-test-verified)
 - 🟡 PARTIAL / ADAPTER
 - 🔴 NOT IMPLEMENTED
+
+## External Parity
+- VERIFIED — primary runtime/reference implementation or official KAT/vector independently confirms parity
+- UNVERIFIED — API implementation/tests exist, but external runtime parity is not independently confirmed
+- N/A — external/runtime parity is outside this API boundary
+
+**Important:** `IMPLEMENTED (internal-test-verified)` does not mean `External parity: VERIFIED`.
+Internal tests are not external runtime parity evidence.
 
 ### Misrepresentation Risk
 - LOW — unlikely to imply unsupported guarantees
@@ -43,7 +51,23 @@
 | task_hash construction | 🟢 | LOW | SPEC-CONFORMANT; INTERNALLY TESTED |
 | Task identity binding | 🟢 | LOW | SPEC-CONFORMANT; INTERNALLY TESTED |
 
-Current implementation matches the specified task-hash construction.
+Current implementation is internally tested against the specified task-hash construction.
+External runtime byte-level parity is not independently verified.
+
+## External Parity Classification
+
+| Capability | Implementation status | External parity |
+|---|---|---|
+| task_hash construction | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| Quorum arithmetic (`ceil(active_count × threshold).max(1)`) | IMPLEMENTED (internal-test-verified) | N/A — protocol-defined arithmetic; no runtime-specific byte-level parity claim |
+| model_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| output_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| report_data construction / binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| Canonical DecodePolicy v1 encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+
+**Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
 
 # 3. ValidatorAttestation
 
@@ -330,3 +354,32 @@ The current API may only accept, bind, validate, and expose gn_weight as an exte
 
 Phase 4 status: CLOSED — SOURCE ARTIFACT UNAVAILABLE / GAP.
 Next phase: Phase 5 — Safe API Adapters.
+
+# 16. Runtime-Side Tracking
+
+The following Yellow Paper items are runtime-side and are not audited
+against implementation source because the corresponding public runtime
+source is not available in this repository.
+
+| Item | Status | External source |
+|---|---|---|
+| E.51 Canonical wire-format operational binding | TRACKING | Runtime source unavailable |
+| E.52 Verification-liveness gate | TRACKING | Runtime source unavailable |
+| E.53 Re-execution checker lane | TRACKING | Runtime source unavailable |
+
+These items MUST NOT be represented as implemented, externally verified,
+or runtime-parity-confirmed by the Proof API.
+
+Their current state is based on the Yellow Paper specification/status only,
+not on direct runtime source inspection.
+
+## §12.1 / VerifiedTurn Spec Verification Note
+
+`VerifiedTurn` and its runtime/session transcript semantics are not treated
+as externally verified for V1.
+
+Any classification that depends on secondary or inferred material remains
+outside the V1 external-parity claim until confirmed directly against the
+primary Yellow Paper text.
+
+**Current treatment:** V1.1 candidate / spec verification pending.
