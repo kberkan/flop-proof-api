@@ -125,7 +125,7 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **179 passed**
+Current regression status: **221 passed**
 
 ## G_n boundary
 
