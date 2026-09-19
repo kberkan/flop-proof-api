@@ -1,4 +1,5 @@
 import hashlib
+import os
 import uuid
 
 from fastapi.testclient import TestClient
@@ -8,7 +9,10 @@ from app.database import SessionLocal
 from app.models import PendingVerification
 
 
-client = TestClient(app)
+client = TestClient(
+    app,
+    headers={"X-API-Key": os.environ["FLOP_API_KEY"]},
+)
 
 
 def _batch_payload():
@@ -28,6 +32,35 @@ def _batch_payload():
         "model_hash": "11" * 32,
         "output_hash": "22" * 32,
     }
+
+
+def test_submit_stark_batch_requires_api_key():
+    payload = _batch_payload()
+
+    unauthenticated_client = TestClient(app)
+    response = unauthenticated_client.post(
+        "/stark-batches",
+        json=payload,
+    )
+
+    assert response.status_code == 401
+
+
+def test_submit_stark_batch_rejects_invalid_api_key():
+    payload = _batch_payload()
+
+    invalid_client = TestClient(
+        app,
+        headers={"X-API-Key": "invalid-key"},
+    )
+    response = invalid_client.post(
+        "/stark-batches",
+        json=payload,
+    )
+
+    assert response.status_code == 401
+
+
 
 
 def test_submit_stark_batch_accepts_valid_batch():

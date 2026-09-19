@@ -262,6 +262,7 @@ def accept_proof_validator_attestations(
 def submit_stark_batch(
     payload: StarkBatchSubmitRequest,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_api_key),
 ):
     task_hash = payload.task_hash.lower()
 
