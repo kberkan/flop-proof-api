@@ -147,7 +147,7 @@ def test_validator_attestation_endpoint_rejects_empty_attestations():
         "/validator-attestations/accept",
         json={
             "result": {},
-            "report_data": "00" * 32,
+            "report_data": "00" * 64,
             "attestations": [],
         },
     )
@@ -174,16 +174,14 @@ def test_validator_attestation_endpoint_accepts_two_of_three_validators(monkeypa
         main.ProcessedTasks(),
     )
 
-    report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     result = {
@@ -256,16 +254,14 @@ def test_validator_attestation_endpoint_rejects_result_binding_mismatch(monkeypa
         main.ProcessedTasks(),
     )
 
-    report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     result = {
@@ -322,16 +318,14 @@ def test_validator_attestation_endpoint_rejects_report_data_mismatch(monkeypatch
         main.ProcessedTasks(),
     )
 
-    valid_report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    valid_report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     invalid_report_data = (
@@ -395,16 +389,14 @@ def test_validator_attestation_endpoint_rejects_below_quorum_without_consuming_t
         main.ProcessedTasks(),
     )
 
-    report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     result = {
@@ -498,16 +490,14 @@ def test_validator_attestation_endpoint_rejects_injected_validator(monkeypatch):
         hardware_id_hash=common["hardware_id_hash"],
     )
 
-    report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     result = {
@@ -582,16 +572,14 @@ def test_validator_attestation_endpoint_rejects_replay(monkeypatch):
 
     import base64
 
-    report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     result = {
@@ -665,16 +653,14 @@ def test_validator_attestation_endpoint_is_single_winner_under_concurrency(
         main.ProcessedTasks(),
     )
 
-    report_data = main.sha256_bytes(
-        (
-            common["task_hash"]
-            + common["gn_weight"].to_bytes(8, "little")
-            + common["latency_ms"].to_bytes(8, "little")
-            + common["model_hash"]
-            + common["output_hash"]
-            + common["decode_policy_hash"]
-            + common["tee_type"].to_bytes(1, "little")
-        )
+    report_data = main.compute_report_data(
+        task_hash=common["task_hash"],
+        gn_weight=common["gn_weight"].to_bytes(8, "little"),
+        latency_ms=common["latency_ms"].to_bytes(8, "little"),
+        model_hash=common["model_hash"],
+        output_hash=common["output_hash"],
+        decode_policy_hash=common["decode_policy_hash"],
+        tee_type=common["tee_type"].to_bytes(1, "little"),
     )
 
     result = {
@@ -916,7 +902,7 @@ def test_proof_validator_attestation_requires_result_created(monkeypatch):
     response = client.post(
         "/proofs/proof-that-does-not-exist/validator-attestations/accept",
         json={
-            "report_data": "00" * 32,
+            "report_data": "00" * 64,
             "attestations": [],
         },
     )
@@ -1121,7 +1107,7 @@ def test_proof_validator_attestation_rejects_missing_result_created(monkeypatch)
     response = client.post(
         f"/proofs/{created['proof_id']}/validator-attestations/accept",
         json={
-            "report_data": "00" * 32,
+            "report_data": "00" * 64,
             "attestations": [],
         },
     )
@@ -1174,7 +1160,7 @@ def test_proof_validator_attestation_rejects_incomplete_result(monkeypatch):
     response = client.post(
         f"/proofs/{created['proof_id']}/validator-attestations/accept",
         json={
-            "report_data": "00" * 32,
+            "report_data": "00" * 64,
             "attestations": [],
         },
     )
@@ -1585,15 +1571,15 @@ def test_validator_attestation_throughput_tripwire_accepts_exact_boundary(monkey
         )
         encoded.append(item)
 
-    report_data = main.sha256_bytes(
-        common["task_hash"]
-        + gn_weight.to_bytes(8, "little")
-        + latency_ms.to_bytes(8, "little")
-        + common["model_hash"]
-        + common["output_hash"]
-        + common["decode_policy_hash"]
-        + common["tee_type"].to_bytes(1, "little")
-    )
+    report_data = main.compute_report_data(
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight.to_bytes(8, "little"),
+            latency_ms=latency_ms.to_bytes(8, "little"),
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"].to_bytes(1, "little"),
+        )
 
     response = client.post(
         "/validator-attestations/accept",
@@ -1673,15 +1659,15 @@ def test_validator_attestation_throughput_tripwire_rejects_above_boundary(monkey
         )
         encoded.append(item)
 
-    report_data = main.sha256_bytes(
-        common["task_hash"]
-        + gn_weight.to_bytes(8, "little")
-        + latency_ms.to_bytes(8, "little")
-        + common["model_hash"]
-        + common["output_hash"]
-        + common["decode_policy_hash"]
-        + common["tee_type"].to_bytes(1, "little")
-    )
+    report_data = main.compute_report_data(
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight.to_bytes(8, "little"),
+            latency_ms=latency_ms.to_bytes(8, "little"),
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"].to_bytes(1, "little"),
+        )
 
     response = client.post(
         "/validator-attestations/accept",
@@ -1761,15 +1747,15 @@ def test_validator_attestation_throughput_tripwire_rejects_zero_latency(monkeypa
         )
         encoded.append(item)
 
-    report_data = main.sha256_bytes(
-        common["task_hash"]
-        + gn_weight.to_bytes(8, "little")
-        + latency_ms.to_bytes(8, "little")
-        + common["model_hash"]
-        + common["output_hash"]
-        + common["decode_policy_hash"]
-        + common["tee_type"].to_bytes(1, "little")
-    )
+    report_data = main.compute_report_data(
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight.to_bytes(8, "little"),
+            latency_ms=latency_ms.to_bytes(8, "little"),
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"].to_bytes(1, "little"),
+        )
 
     response = client.post(
         "/validator-attestations/accept",
@@ -1851,15 +1837,15 @@ def test_validator_attestation_tripwire_rejection_does_not_consume_task(monkeypa
         )
         encoded.append(item)
 
-    report_data = main.sha256_bytes(
-        common["task_hash"]
-        + gn_weight.to_bytes(8, "little")
-        + latency_ms.to_bytes(8, "little")
-        + common["model_hash"]
-        + common["output_hash"]
-        + common["decode_policy_hash"]
-        + common["tee_type"].to_bytes(1, "little")
-    )
+    report_data = main.compute_report_data(
+            task_hash=common["task_hash"],
+            gn_weight=gn_weight.to_bytes(8, "little"),
+            latency_ms=latency_ms.to_bytes(8, "little"),
+            model_hash=common["model_hash"],
+            output_hash=common["output_hash"],
+            decode_policy_hash=common["decode_policy_hash"],
+            tee_type=common["tee_type"].to_bytes(1, "little"),
+        )
 
     response = client.post(
         "/validator-attestations/accept",

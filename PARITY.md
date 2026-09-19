@@ -58,17 +58,35 @@ Runtime producer/consumer operational binding remains an E.51 runtime-side
 tracking item. External runtime byte-level parity is not independently
 verified.
 
+# 3. Compute Channel ID
+
+| Capability | Status | Risk | Evidence |
+|---|---:|---:|---|
+| canonical channel_id v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED |
+| Compute-channel runtime lifecycle | 🔴 | HIGH | CAT-3 — open_channel / VerifiedTurn / receipt / settle / dispute runtime semantics are not implemented or externally verified |
+
+The canonical `channel_id` v1 primitive is implemented and internally
+verified against the public wire-format vector. The deterministic primitive
+binds the protocol/domain tag, version, genesis hash, agent, miner, and
+u64 little-endian nonce.
+
+This does **not** claim implementation or external verification of the
+compute-channel runtime lifecycle, including `open_channel`, `VerifiedTurn`,
+agent receipts, Merkle/session state, `settle`, or dispute/finalization
+semantics.
+
 ## External Parity Classification
 
 | Capability | Implementation status | External parity |
 |---|---|---|
-| task_hash construction | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
+| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | Quorum arithmetic (`ceil(active_count × threshold).max(1)`) | IMPLEMENTED (internal-test-verified) | N/A — protocol-defined arithmetic; no runtime-specific byte-level parity claim |
 | model_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | output_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
-| report_data construction / binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| report_data construction / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Canonical DecodePolicy v1 encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 
 **Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
@@ -148,11 +166,11 @@ verified.
 
 | Capability | Status | Risk | Exact nuance |
 |---|---:|---:|---|
-| Canonical field composition | 🟢 | LOW | task_hash ‖ gn_weight ‖ latency_ms ‖ model_hash ‖ output_hash ‖ decode_policy_hash ‖ tee_type |
+| Canonical field composition | 🟢 | LOW | SHA256(task_hash ‖ gn_weight:u64LE ‖ latency_ms:u64LE ‖ model_hash ‖ output_hash ‖ decode_policy_hash ‖ SCALE(tee_type)) ‖ 00×32 |
 | SHA-256 construction | 🟢 | LOW | Canonical field encodings used |
 | latency_ms inclusion | 🟢 | LOW | Included in report_data |
 | Actual quote verification | 🔴 | HIGH | CAT-2 — hardware/execution infrastructure; No real quote parser/verifier |
-| External KAT/vector verification | 🔴 | MEDIUM | EXTERNAL-VERIFICATION — official runtime/vector evidence required |
+| External KAT/vector verification | 🟢 | LOW | PUBLIC-CANONICAL WIRE VECTOR — VERIFIED |
 
 # 9. latency
 

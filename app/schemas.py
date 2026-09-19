@@ -94,12 +94,12 @@ class ValidatorAttestationAcceptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     result: dict[str, Any]
-    report_data: str = Field(min_length=64, max_length=64)
+    report_data: str = Field(min_length=128, max_length=128)
     attestations: list[ValidatorAttestationSchema] = Field(min_length=1)
 
 
 class ProofValidatorAttestationAcceptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    report_data: str = Field(min_length=64, max_length=64)
+    report_data: str = Field(min_length=128, max_length=128)
     attestations: list[ValidatorAttestationSchema] = Field(default_factory=list)

@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from fractions import Fraction
 
+from app.crypto import compute_report_data
 from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse

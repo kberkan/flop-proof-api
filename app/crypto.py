@@ -436,6 +436,37 @@ def compute_task_hash(
     ).hexdigest()
 
 
+def compute_channel_id_v1(
+    genesis_hash: bytes,
+    agent: bytes,
+    miner: bytes,
+    nonce: int,
+) -> str:
+    """Compute the canonical FLOP compute-channel ID v1."""
+    for name, value in (
+        ("genesis_hash", genesis_hash),
+        ("agent", agent),
+        ("miner", miner),
+    ):
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
+    if not isinstance(nonce, int) or isinstance(nonce, bool):
+        raise TypeError("nonce must be an integer")
+    if nonce < 0 or nonce > 2**64 - 1:
+        raise ValueError("nonce must fit in u64")
+
+    preimage = (
+        b"FLOP/COMPUTE_CHANNEL/ID"
+        + b"\x01"
+        + genesis_hash
+        + agent
+        + miner
+        + nonce.to_bytes(8, byteorder="little", signed=False)
+    )
+    return hashlib.blake2b(preimage, digest_size=32).hexdigest()
+
+
 def compute_task_hash_v1(
     genesis_hash: bytes,
     agent: bytes,
@@ -796,7 +827,8 @@ def compute_report_data(
         + tee_type
     )
 
-    return hashlib.sha256(preimage).hexdigest()
+    digest = hashlib.sha256(preimage).digest()
+    return (digest + b"\x00" * 32).hex()
 
 
 def verify_and_accept_validator_attestation_quorum(

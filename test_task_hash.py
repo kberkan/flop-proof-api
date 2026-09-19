@@ -462,7 +462,7 @@ def test_report_data_primitive_matches_sha256_binding():
         + output_hash
         + decode_policy_hash
         + tee_type
-    ).hexdigest()
+    ).hexdigest() + "00" * 32
 
     assert compute_report_data(
         task_hash,
@@ -1870,7 +1870,7 @@ def test_report_data_binds_task_model_and_output_hashes():
     )
 
     assert isinstance(report_data, str)
-    assert len(report_data) == 64
+    assert len(report_data) == 128
 
 
 def test_report_data_changes_when_task_hash_changes():
@@ -4711,7 +4711,7 @@ def test_report_data_matches_canonical_wire_format_v1_vector():
     )
 
     expected = (
-        "3165c6d38fbf992485c8c8640476f9a7a5db94523a32387e838d205d178bfff7"
+        "3165c6d38fbf992485c8c8640476f9a7a5db94523a32387e838d205d178bfff70000000000000000000000000000000000000000000000000000000000000000"
     )
 
     assert compute_report_data(
@@ -4722,4 +4722,27 @@ def test_report_data_matches_canonical_wire_format_v1_vector():
         output_hash=output_hash,
         decode_policy_hash=decode_policy_hash,
         tee_type=bytes([0]),
+    ) == expected
+
+
+def test_compute_channel_id_v1_matches_public_canonical_vector():
+    from app.crypto import compute_channel_id_v1
+
+    genesis_hash = bytes.fromhex(
+        "000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d1e1f"
+    )
+    agent = bytes.fromhex("11" * 32)
+    miner = bytes.fromhex("22" * 32)
+    nonce = 42
+
+    expected = (
+        "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+    )
+
+    assert compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=agent,
+        miner=miner,
+        nonce=nonce,
     ) == expected
