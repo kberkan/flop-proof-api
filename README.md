@@ -125,7 +125,21 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **221 passed**
+Current regression status: **222 passed**
+
+## Canonical wire primitives
+
+The API includes internally tested canonical v1 constructions for the following FLOP wire-level identifiers and commitments:
+
+- `task_hash_v1` — canonical `FLOP/POUI/TASK` v1 domain/version construction with fixed-width hashes and `nonce:u64LE`.
+- `channel_id_v1` — canonical `FLOP/COMPUTE_CHANNEL/ID` v1 construction with `genesis_hash`, `agent`, `miner`, and `nonce:u64LE`.
+- `report_data v1` — SHA-256 commitment over the canonical report-data preimage followed by `00 × 32`, producing a **64-byte / 128-hex-character** value.
+
+These constructions are verified against the available public-canonical wire vectors and covered by the repository regression suite.
+
+This parity is limited to the deterministic wire-level primitives. It does **not** claim implementation of the full FLOP compute-channel runtime lifecycle, including channel opening, streaming `VerifiedTurn` receipts, Merkle/session state, settlement, disputes, or finalization.
+
+The API also does not claim that canonical task/channel identifiers are currently enforced throughout an external FLOP runtime producer/validator pipeline. Those runtime-side bindings remain tracked separately in `PARITY.md`.
 
 ## G_n boundary
 
