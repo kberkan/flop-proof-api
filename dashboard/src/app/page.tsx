@@ -19,12 +19,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-const proofs = [
-  ["proof_fac398664d684d77803cc0f2f34153e4", "VALID", "2 events", "2 min ago"],
-  ["proof_9ff48249e58b4e05a56ca164f6092185", "VALID", "1 event", "8 min ago"],
-  ["proof_4208145ab703485ab4e68ddae4c8b73b", "VALID", "3 events", "21 min ago"],
-];
-
 function Status({ value }: { value: string }) {
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-emerald-300">
@@ -238,19 +232,46 @@ export default function Home() {
                 </div>
 
                 <div className="divide-y divide-white/[0.05]">
-                  {proofs.map(([id, status, events, time]) => (
-                    <div key={id} className="group flex items-center gap-4 px-5 py-4 hover:bg-white/[0.025]">
+                  {loading && (
+                    <div className="px-5 py-8 text-center text-xs text-slate-600">
+                      Loading proofs...
+                    </div>
+                  )}
+
+                  {!loading && error && (
+                    <div className="px-5 py-8 text-center text-xs text-red-400">
+                      {error}
+                    </div>
+                  )}
+
+                  {!loading && !error && data?.items.map((proof) => (
+                    <a
+                      key={proof.proof_id}
+                      href={`/proofs/${proof.proof_id}`}
+                      className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/[0.025]"
+                    >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.025]">
                         <ShieldCheck size={16} className="text-emerald-400" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-mono text-xs text-slate-300">{id}</div>
-                        <div className="mt-1 text-[11px] text-slate-600">{events} • {time}</div>
+                        <div className="truncate font-mono text-xs text-slate-300">
+                          {proof.proof_id}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-600">
+                          {proof.events} {proof.events === 1 ? "event" : "events"} •{" "}
+                          {new Date(proof.created_at).toLocaleString()}
+                        </div>
                       </div>
-                      <Status value={status} />
+                      <Status value={proof.status.toUpperCase()} />
                       <ChevronRight size={16} className="hidden text-slate-700 sm:block" />
-                    </div>
+                    </a>
                   ))}
+
+                  {!loading && !error && data?.items.length === 0 && (
+                    <div className="px-5 py-8 text-center text-xs text-slate-600">
+                      No proofs found.
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -272,9 +293,12 @@ export default function Home() {
                   ))}
                 </div>
 
-                <button className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-semibold text-black hover:bg-slate-200">
+                <a
+                  href="/verification"
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-semibold text-black hover:bg-slate-200"
+                >
                   <ShieldCheck size={15} /> Verify a proof
-                </button>
+                </a>
               </section>
             </div>
 

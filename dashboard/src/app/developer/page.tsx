@@ -68,10 +68,10 @@ const endpoints = [
 const createExample = `curl -X POST http://localhost:8000/proofs \\
   -H "Content-Type: application/json" \\
   -d '{
-    "request_id": "req_demo_001",
-    "room": "demo-room",
-    "nonce": "nonce-001",
-    "text": "hello FLOP",
+    "request_id": "{request_id}",
+    "room": "{room}",
+    "nonce": "{nonce}",
+    "text": "{text}",
     "actor_did": "did:key:z..."
   }'`;
 
@@ -109,10 +109,10 @@ const pythonExample = `from flop_proof_sdk import FlopProofClient
 client = FlopProofClient("http://localhost:8000")
 
 proof = client.create_proof(
-    request_id="req_demo_001",
-    room="demo-room",
-    nonce="nonce-001",
-    text="hello FLOP",
+    request_id="{request_id}",
+    room="{room}",
+    nonce="{nonce}",
+    text="{text}",
     actor_did="did:key:z...",
 )
 
@@ -126,9 +126,9 @@ const signingExample = `from flop_proof_sdk import (
 )
 
 message = canonical_signed_message(
-    room="demo-room",
-    nonce="nonce-001",
-    text="hello FLOP",
+    room="{room}",
+    nonce="{nonce}",
+    text="{text}",
 )
 
 signature = sign_message(private_key, message)`;
