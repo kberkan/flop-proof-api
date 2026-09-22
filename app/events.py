@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .crypto import hash_event_record, sha256_json
@@ -23,6 +23,12 @@ def create_event(
 
     if canonical is None:
         canonical = f"{proof_id}|{event_type}|{payload_hash}"
+
+    # SQLite must serialize concurrent sequence allocation. Without an
+    # immediate write transaction, concurrent writers can both observe the
+    # same last sequence and create duplicate sequence numbers.
+    if db.bind is not None and db.bind.dialect.name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
 
     last_event = db.scalar(
         select(ProofEvent)

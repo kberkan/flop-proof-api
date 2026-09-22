@@ -215,3 +215,65 @@ def test_active_to_failed_and_locked():
     )
 
     assert locked_response.status_code == 409
+
+def test_concurrent_event_append_keeps_unique_sequences():
+    from concurrent.futures import ThreadPoolExecutor
+    import uuid
+
+    from app.database import SessionLocal
+    from app.events import create_event
+    from app.models import Proof, ProofEvent
+
+    proof_id = f"proof-event-concurrent-{uuid.uuid4().hex}"
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        db.add(
+            Proof(
+                proof_id=proof_id,
+                request_id=f"request-{uuid.uuid4().hex}",
+                version="1",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    def append(index):
+        db = SessionLocal()
+        try:
+            event = create_event(
+                db=db,
+                proof_id=proof_id,
+                event_type="test.concurrent",
+                actor_did=f"did:key:test-{index}",
+                payload={"index": index},
+                canonical=f"{proof_id}|test.concurrent|{index}",
+                signature=f"signature-{index}",
+                nonce=f"nonce-{index}",
+            )
+            db.commit()
+            return event.sequence
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        sequences = list(executor.map(append, range(2)))
+
+    db = SessionLocal()
+    try:
+        events = (
+            db.query(ProofEvent)
+            .filter(ProofEvent.proof_id == proof_id)
+            .order_by(ProofEvent.sequence)
+            .all()
+        )
+        assert len(events) == 2
+        assert sorted(sequences) == [1, 2]
+        assert [event.sequence for event in events] == [1, 2]
+    finally:
+        db.close()
