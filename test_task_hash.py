@@ -4746,3 +4746,261 @@ def test_compute_channel_id_v1_matches_public_canonical_vector():
         miner=miner,
         nonce=nonce,
     ) == expected
+
+# ---------------------------------------------------------------------------
+# Canonical compute-channel wire-format v1 KATs
+# ---------------------------------------------------------------------------
+
+def test_verified_turn_leaf_versions_match_public_canonical_vectors():
+    from app.crypto import compute_verified_turn_leaf_v0_v1_v2_v3
+
+    channel_id = bytes.fromhex(
+        "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+    )
+    h_in = bytes.fromhex("33" * 32)
+    h_out = bytes.fromhex("44" * 32)
+    decode_policy_hash = bytes.fromhex("66" * 32)
+    h_ids = bytes.fromhex(
+        "368e6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f"
+    )
+    toploc = bytes.fromhex("77" * 32)
+    g_n = 2**128 - 1
+    turn_index = 2**32 - 1
+    miner_recv_ms = 2**64 - 3
+    miner_done_ms = 2**64 - 2
+    latency_ms = 1
+    zero = b"\x00" * 32
+
+    common = dict(
+        channel_id=channel_id,
+        turn_index=turn_index,
+        h_in=h_in,
+        h_out=h_out,
+        g_n=g_n,
+    )
+
+    assert compute_verified_turn_leaf_v0_v1_v2_v3(
+        leaf_version=0, **common
+    ) == "c94322dcec243f39ac92af04248f643ca2978f138c1f9bb4bb2d2720ee8f5ad9"
+
+    assert compute_verified_turn_leaf_v0_v1_v2_v3(
+        leaf_version=1,
+        miner_recv_ms=miner_recv_ms,
+        miner_done_ms=miner_done_ms,
+        latency_ms=latency_ms,
+        **common,
+    ) == "218d9062a948e52066456ecb38cc28517423f427a925d1f57c2cd17cc60f1b97"
+
+    assert compute_verified_turn_leaf_v0_v1_v2_v3(
+        leaf_version=2,
+        decode_policy_hash=decode_policy_hash,
+        miner_recv_ms=miner_recv_ms,
+        miner_done_ms=miner_done_ms,
+        latency_ms=latency_ms,
+        **common,
+    ) == "4a3632de6913f0502c6313499b29d0976b085a4612e14e017c5eaf065b1c6c2d"
+
+    assert compute_verified_turn_leaf_v0_v1_v2_v3(
+        leaf_version=3,
+        decode_policy_hash=decode_policy_hash,
+        h_ids=h_ids,
+        toploc_commitment_hash=toploc,
+        miner_recv_ms=miner_recv_ms,
+        miner_done_ms=miner_done_ms,
+        latency_ms=latency_ms,
+        **common,
+    ) == "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+
+    assert zero == b"\x00" * 32
+
+
+def test_verified_turn_wrong_leaf_version_fails_closed():
+    import pytest
+    from app.crypto import compute_verified_turn_leaf_v0_v1_v2_v3
+
+    with pytest.raises(ValueError, match="LeafFieldsInconsistent"):
+        compute_verified_turn_leaf_v0_v1_v2_v3(
+            leaf_version=2,
+            channel_id=bytes.fromhex("3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"),
+            turn_index=2**32 - 1,
+            h_in=bytes.fromhex("33" * 32),
+            h_out=bytes.fromhex("44" * 32),
+            g_n=2**128 - 1,
+            decode_policy_hash=bytes.fromhex("66" * 32),
+            h_ids=bytes.fromhex(
+                "368e6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f"
+            ),
+            toploc_commitment_hash=bytes.fromhex("77" * 32),
+            miner_recv_ms=2**64 - 3,
+            miner_done_ms=2**64 - 2,
+            latency_ms=1,
+        )
+
+
+def test_verified_turn_v3_signature_matches_public_canonical_vector():
+    from app.crypto import (
+        compute_verified_turn_leaf_v0_v1_v2_v3,
+        verify_verified_turn_leaf_signature,
+    )
+
+    leaf_hash = bytes.fromhex(
+        compute_verified_turn_leaf_v0_v1_v2_v3(
+            leaf_version=3,
+            channel_id=bytes.fromhex(
+                "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+            ),
+            turn_index=2**32 - 1,
+            h_in=bytes.fromhex("33" * 32),
+            h_out=bytes.fromhex("44" * 32),
+            g_n=2**128 - 1,
+            decode_policy_hash=bytes.fromhex("66" * 32),
+            h_ids=bytes.fromhex(
+                "368e6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f"
+            ),
+            toploc_commitment_hash=bytes.fromhex("77" * 32),
+            miner_recv_ms=2**64 - 3,
+            miner_done_ms=2**64 - 2,
+            latency_ms=1,
+        )
+    )
+
+    public_key = bytes.fromhex(
+        "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+    )
+    signature = bytes.fromhex(
+        "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
+        "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+    )
+
+    assert verify_verified_turn_leaf_signature(public_key, signature, leaf_hash)
+
+
+def test_compute_channel_merkle_root_matches_public_canonical_vector():
+    from app.crypto import compute_merkle_root, verify_merkle_path
+
+    v1 = bytes.fromhex(
+        "218d9062a948e52066456ecb38cc28517423f427a925d1f57c2cd17cc60f1b97"
+    )
+    v2 = bytes.fromhex(
+        "4a3632de6913f0502c6313499b29d0976b085a4612e14e017c5eaf065b1c6c2d"
+    )
+    v3 = bytes.fromhex(
+        "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+    )
+
+    root = bytes.fromhex(
+        "1020281304e2677e48c1093e7f5069fc8fbff1ea82daf2ac5b2b49d7cef756ed"
+    )
+
+    assert compute_merkle_root([v1, v2, v3]) == root.hex()
+
+    path = [
+        (
+            bytes.fromhex(
+                "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+            ),
+            False,
+        ),
+        (
+            bytes.fromhex(
+                "482735fe0838313af87270c7fa678a8fb6c3cf9d9e3af35b8c73ea39f279a92a"
+            ),
+            True,
+        ),
+    ]
+
+    assert verify_merkle_path(v3, 2, path, root)
+
+
+def test_merkle_wrong_path_orientation_fails_closed():
+    from app.crypto import verify_merkle_path
+
+    leaf = bytes.fromhex(
+        "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+    )
+    root = bytes.fromhex(
+        "1020281304e2677e48c1093e7f5069fc8fbff1ea82daf2ac5b2b49d7cef756ed"
+    )
+    path = [
+        (
+            bytes.fromhex(
+                "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+            ),
+            True,
+        ),
+        (
+            bytes.fromhex(
+                "482735fe0838313af87270c7fa678a8fb6c3cf9d9e3af35b8c73ea39f279a92a"
+            ),
+            True,
+        ),
+    ]
+
+    assert not verify_merkle_path(leaf, 2, path, root)
+
+
+def test_agent_receipt_v1_matches_public_canonical_vector():
+    from app.crypto import (
+        compute_agent_receipt_v1_signable_payload,
+        verify_agent_receipt_v1,
+    )
+
+    channel_id = bytes.fromhex("11" * 32)
+    final_root = bytes.fromhex("22" * 32)
+    aggregate_gn = 42
+    payable = 1000
+
+    payload = compute_agent_receipt_v1_signable_payload(
+        channel_id=channel_id,
+        final_root=final_root,
+        aggregate_gn=aggregate_gn,
+        payable=payable,
+    )
+
+    expected_prefix = bytes.fromhex(
+        "464c4f502f434f4d505554455f4348414e4e454c2f5245434549505401"
+    )
+    expected = (
+        expected_prefix
+        + channel_id
+        + final_root
+        + aggregate_gn.to_bytes(16, byteorder="little", signed=False)
+        + payable.to_bytes(16, byteorder="little", signed=False)
+    )
+
+    assert payload == expected
+    assert len(payload) == 125
+
+    public_key = bytes.fromhex(
+        "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+    )
+    signature = bytes.fromhex(
+        "7803f98d0297c23f5df90f4bce093492de9658045d3d2296717a1e718e8bc40d"
+        "891e60e517fdc459f59140b289d9fcba90809493875b5d8e77325b0ec9572683"
+    )
+
+    assert verify_agent_receipt_v1(
+        public_key=public_key,
+        signature=signature,
+        channel_id=channel_id,
+        final_root=final_root,
+        aggregate_gn=aggregate_gn,
+        payable=payable,
+    )
+
+def test_agent_receipt_invalid_signature_fails_closed():
+    from app.crypto import verify_agent_receipt_v1
+
+    assert not verify_agent_receipt_v1(
+        public_key=bytes.fromhex(
+            "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+        ),
+        signature=bytes.fromhex(
+            "7903f98d0297c23f5df90f4bce093492de9658045d3d2296717a1e718e8bc40d"
+            "891e60e517fdc459f59140b289d9fcba90809493875b5d8e77325b0ec9572683"
+        ),
+        channel_id=bytes.fromhex("11" * 32),
+        final_root=bytes.fromhex("22" * 32),
+        aggregate_gn=42,
+        payable=1000,
+    )

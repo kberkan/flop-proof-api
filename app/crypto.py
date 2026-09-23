@@ -467,6 +467,258 @@ def compute_channel_id_v1(
     return hashlib.blake2b(preimage, digest_size=32).hexdigest()
 
 
+def compute_verified_turn_leaf_v0_v1_v2_v3(
+    leaf_version: int,
+    channel_id: bytes,
+    turn_index: int,
+    h_in: bytes,
+    h_out: bytes,
+    g_n: int,
+    decode_policy_hash: bytes = b"\x00" * 32,
+    h_ids: bytes = b"\x00" * 32,
+    toploc_commitment_hash: bytes = b"\x00" * 32,
+    miner_recv_ms: int = 0,
+    miner_done_ms: int = 0,
+    latency_ms: int = 0,
+) -> str:
+    """Compute the canonical FLOP VerifiedTurn leaf hash for V0..V3.
+
+    NOTE: no domain prefix here. The deployment/session-bound channel_id
+    is the leading field, unlike task_hash/channel_id/receipt.
+
+    The version determines exactly one preimage. Fields belonging to a
+    newer version must remain zero when computing an older version so a
+    caller cannot silently hash a V3-shaped turn as V0/V1/V2.
+    """
+    if leaf_version not in (0, 1, 2, 3):
+        raise ValueError("unsupported leaf_version")
+
+    for name, value in (
+        ("channel_id", channel_id),
+        ("h_in", h_in),
+        ("h_out", h_out),
+        ("decode_policy_hash", decode_policy_hash),
+        ("h_ids", h_ids),
+        ("toploc_commitment_hash", toploc_commitment_hash),
+    ):
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
+    if not isinstance(turn_index, int) or isinstance(turn_index, bool):
+        raise TypeError("turn_index must be an integer")
+    if not 0 <= turn_index <= 2**32 - 1:
+        raise ValueError("turn_index must fit in u32")
+
+    if not isinstance(g_n, int) or isinstance(g_n, bool):
+        raise TypeError("g_n must be an integer")
+    if not 0 <= g_n <= 2**128 - 1:
+        raise ValueError("g_n must fit in u128")
+
+    for name, value in (
+        ("miner_recv_ms", miner_recv_ms),
+        ("miner_done_ms", miner_done_ms),
+        ("latency_ms", latency_ms),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"{name} must be an integer")
+        if not 0 <= value <= 2**64 - 1:
+            raise ValueError(f"{name} must fit in u64")
+
+    zero32 = b"\x00" * 32
+
+    # SCALE enum/version field consistency is fail-closed:
+    # V0/V1 have no decode-policy binding.
+    if leaf_version in (0, 1) and decode_policy_hash != zero32:
+        raise ValueError("LeafFieldsInconsistent: decode_policy_hash")
+    # V0/V1/V2 do not carry the V3 token-ID/TOPLOC fields.
+    if leaf_version in (0, 1, 2) and (
+        h_ids != zero32 or toploc_commitment_hash != zero32
+    ):
+        raise ValueError("LeafFieldsInconsistent: V3 fields")
+    # V0 does not carry timing fields.
+    if leaf_version == 0 and any(
+        value != 0 for value in (miner_recv_ms, miner_done_ms, latency_ms)
+    ):
+        raise ValueError("LeafFieldsInconsistent: timing fields")
+    # V3 explicitly binds both h_ids and TOPLOC.
+    if leaf_version == 3 and (
+        decode_policy_hash == zero32
+        or h_ids == zero32
+        or toploc_commitment_hash == zero32
+    ):
+        raise ValueError("LeafFieldsInconsistent: V3 bindings")
+
+    preimage = (
+        channel_id
+        + turn_index.to_bytes(4, byteorder="little", signed=False)
+        + h_in
+        + h_out
+        + g_n.to_bytes(16, byteorder="little", signed=False)
+    )
+
+    if leaf_version >= 2:
+        preimage += decode_policy_hash
+
+    if leaf_version == 3:
+        preimage += h_ids + toploc_commitment_hash
+
+    if leaf_version >= 1:
+        preimage += (
+            miner_recv_ms.to_bytes(8, byteorder="little", signed=False)
+            + miner_done_ms.to_bytes(8, byteorder="little", signed=False)
+            + latency_ms.to_bytes(8, byteorder="little", signed=False)
+        )
+
+    # NOTE: no domain prefix here; leaf preimage starts directly with channel_id.
+    return hashlib.blake2b(preimage, digest_size=32).hexdigest()
+
+
+def verify_verified_turn_leaf_signature(
+    public_key: bytes,
+    signature: bytes,
+    leaf_hash: bytes,
+) -> bool:
+    """Verify the sr25519 signature over a 32-byte VerifiedTurn leaf hash."""
+    if len(public_key) != 32 or len(signature) != 64 or len(leaf_hash) != 32:
+        return False
+    try:
+        return sr25519.verify(signature, leaf_hash, public_key)
+    except Exception:
+        return False
+
+
+def compute_merkle_node(left: bytes, right: bytes) -> str:
+    """Compute a canonical compute-channel Merkle node.
+
+    NOTE: no domain prefix here. The preimage is exactly left_32 || right_32.
+    """
+    if len(left) != 32 or len(right) != 32:
+        raise ValueError("Merkle node inputs must be exactly 32 bytes")
+    # NOTE: no domain prefix; exactly 64 bytes left_32 || right_32.
+    return hashlib.blake2b(left + right, digest_size=32).hexdigest()
+
+
+def compute_merkle_root(leaves: list[bytes]) -> str:
+    """Compute the canonical ordered Merkle root for turn leaf hashes."""
+    if any(len(leaf) != 32 for leaf in leaves):
+        raise ValueError("every Merkle leaf must be exactly 32 bytes")
+
+    if not leaves:
+        return (b"\x00" * 32).hex()
+
+    level = list(leaves)
+    while len(level) > 1:
+        if len(level) % 2:
+            level.append(level[-1])
+
+        level = [
+            bytes.fromhex(compute_merkle_node(level[i], level[i + 1]))
+            for i in range(0, len(level), 2)
+        ]
+
+    return level[0].hex()
+
+
+def verify_merkle_path(
+    leaf_hash: bytes,
+    turn_index: int,
+    merkle_path: list[tuple[bytes, bool]],
+    root: bytes,
+) -> bool:
+    """Verify one ordered Merkle path against the canonical root."""
+    if len(leaf_hash) != 32 or len(root) != 32:
+        return False
+    if not isinstance(turn_index, int) or isinstance(turn_index, bool):
+        return False
+    if not 0 <= turn_index <= 2**32 - 1:
+        return False
+    if len(merkle_path) > 64:
+        return False
+
+    current = leaf_hash
+
+    for level, item in enumerate(merkle_path):
+        if not isinstance(item, tuple) or len(item) != 2:
+            return False
+
+        sibling, sibling_is_left = item
+
+        if len(sibling) != 32 or not isinstance(sibling_is_left, bool):
+            return False
+
+        # Canonical path orientation is determined by the turn index bit.
+        expected_sibling_is_left = bool((turn_index >> level) & 1)
+        if sibling_is_left != expected_sibling_is_left:
+            return False
+
+        if sibling_is_left:
+            current = bytes.fromhex(compute_merkle_node(sibling, current))
+        else:
+            current = bytes.fromhex(compute_merkle_node(current, sibling))
+
+    return current == root
+
+
+def compute_agent_receipt_v1_signable_payload(
+    channel_id: bytes,
+    final_root: bytes,
+    aggregate_gn: int,
+    payable: int,
+) -> bytes:
+    """Build the canonical agent receipt v1 signing payload.
+
+    NOTE: the domain prefix is present here, unlike leaf/Merkle primitives.
+    """
+    for name, value in (
+        ("channel_id", channel_id),
+        ("final_root", final_root),
+    ):
+        if len(value) != 32:
+            raise ValueError(f"{name} must be exactly 32 bytes")
+
+    for name, value in (
+        ("aggregate_gn", aggregate_gn),
+        ("payable", payable),
+    ):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise TypeError(f"{name} must be an integer")
+        if not 0 <= value <= 2**128 - 1:
+            raise ValueError(f"{name} must fit in u128")
+
+    return (
+        b"FLOP/COMPUTE_CHANNEL/RECEIPT"
+        + b"\x01"
+        + channel_id
+        + final_root
+        + aggregate_gn.to_bytes(16, byteorder="little", signed=False)
+        + payable.to_bytes(16, byteorder="little", signed=False)
+    )
+
+
+def verify_agent_receipt_v1(
+    public_key: bytes,
+    signature: bytes,
+    channel_id: bytes,
+    final_root: bytes,
+    aggregate_gn: int,
+    payable: int,
+) -> bool:
+    """Verify the single agent co-signature over receipt v1."""
+    if len(public_key) != 32 or len(signature) != 64:
+        return False
+
+    try:
+        payload = compute_agent_receipt_v1_signable_payload(
+            channel_id=channel_id,
+            final_root=final_root,
+            aggregate_gn=aggregate_gn,
+            payable=payable,
+        )
+        return sr25519.verify(signature, payload, public_key)
+    except Exception:
+        return False
+
+
 def compute_task_hash_v1(
     genesis_hash: bytes,
     agent: bytes,
