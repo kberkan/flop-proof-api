@@ -63,7 +63,8 @@ verified.
 | Capability | Status | Risk | Evidence |
 |---|---:|---:|---|
 | canonical channel_id v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED |
-| Compute-channel runtime lifecycle | 🔴 | HIGH | CAT-3 — open_channel / VerifiedTurn / receipt / settle / dispute runtime semantics are not implemented or externally verified |
+| Compute-channel verification pipeline | 🟢 | HIGH | CAT-1 — FCC4 decode, VerifiedTurn V0–V3 signature/Merkle verification, collection aggregate_gn checks, and agent receipt v1 are implemented and internally tested |
+| Compute-channel runtime lifecycle | 🔴 | HIGH | CAT-3 — open_channel / force_open / force_ack / settle / force_settle / dispute / finalization runtime semantics are not implemented or externally verified |
 
 The canonical `channel_id` v1 primitive is implemented and internally
 verified against the public wire-format vector. The deterministic primitive
@@ -81,6 +82,7 @@ semantics.
 |---|---|---|
 | task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
+| Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED |
 | ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | Quorum arithmetic (`ceil(active_count × threshold).max(1)`) | IMPLEMENTED (internal-test-verified) | N/A — protocol-defined arithmetic; no runtime-specific byte-level parity claim |
