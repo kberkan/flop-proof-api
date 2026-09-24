@@ -5004,3 +5004,115 @@ def test_agent_receipt_invalid_signature_fails_closed():
         aggregate_gn=42,
         payable=1000,
     )
+
+
+def test_compute_channel_id_v1_changes_when_genesis_hash_changes():
+    from app.crypto import compute_channel_id_v1
+
+    genesis_hash = bytes.fromhex(
+        "000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d1e1f"
+    )
+    agent = bytes.fromhex("11" * 32)
+    miner = bytes.fromhex("22" * 32)
+    nonce = 42
+
+    canonical = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=agent,
+        miner=miner,
+        nonce=nonce,
+    )
+
+    changed = compute_channel_id_v1(
+        genesis_hash=bytes.fromhex(
+            "010102030405060708090a0b0c0d0e0f"
+            "101112131415161718191a1b1c1d1e1f"
+        ),
+        agent=agent,
+        miner=miner,
+        nonce=nonce,
+    )
+
+    assert changed != canonical
+
+
+def test_compute_channel_id_v1_changes_when_agent_changes():
+    from app.crypto import compute_channel_id_v1
+
+    genesis_hash = bytes.fromhex(
+        "000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d1e1f"
+    )
+    miner = bytes.fromhex("22" * 32)
+    nonce = 42
+
+    canonical = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=bytes.fromhex("11" * 32),
+        miner=miner,
+        nonce=nonce,
+    )
+
+    changed = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=bytes.fromhex("12" * 32),
+        miner=miner,
+        nonce=nonce,
+    )
+
+    assert changed != canonical
+
+
+def test_compute_channel_id_v1_changes_when_miner_changes():
+    from app.crypto import compute_channel_id_v1
+
+    genesis_hash = bytes.fromhex(
+        "000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d1e1f"
+    )
+    agent = bytes.fromhex("11" * 32)
+    nonce = 42
+
+    canonical = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=agent,
+        miner=bytes.fromhex("22" * 32),
+        nonce=nonce,
+    )
+
+    changed = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=agent,
+        miner=bytes.fromhex("23" * 32),
+        nonce=nonce,
+    )
+
+    assert changed != canonical
+
+
+def test_compute_channel_id_v1_changes_when_nonce_changes():
+    from app.crypto import compute_channel_id_v1
+
+    genesis_hash = bytes.fromhex(
+        "000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d1e1f"
+    )
+    agent = bytes.fromhex("11" * 32)
+    miner = bytes.fromhex("22" * 32)
+
+    canonical = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=agent,
+        miner=miner,
+        nonce=42,
+    )
+
+    changed = compute_channel_id_v1(
+        genesis_hash=genesis_hash,
+        agent=agent,
+        miner=miner,
+        nonce=43,
+    )
+
+    assert changed != canonical
