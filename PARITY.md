@@ -66,15 +66,41 @@ verified.
 | Compute-channel verification pipeline | 🟢 | HIGH | CAT-1 — FCC4 decode, VerifiedTurn V0–V3 signature/Merkle verification, collection aggregate_gn checks, and agent receipt v1 are implemented and internally tested |
 | Compute-channel runtime lifecycle | 🔴 | HIGH | CAT-3 — open_channel / force_open / force_ack / settle / force_settle / dispute / finalization runtime semantics are not implemented or externally verified |
 
+### CAT-3 blocker: upstream spec ambiguity
+
+CAT-3 implementation is currently BLOCKED by unresolved upstream spec
+ambiguity in FLOP Yellow Paper §12.1, tracked in flop-labs/yellowpaper
+issues:
+
+- #33: settlement tariff P's unit ("channel pay unit") is undefined;
+  E-P cannot be computed from the text as written.
+- #4: R12.1b's own receipt leaf-tuple example is the legacy V0 preimage,
+  not the F.3 V3 leaf that settle/force_settle actually require (our
+  agent_receipt_v1 implementation correctly follows F.3, not R12.1b).
+- #85: settlement_class has no published enum/wire definition.
+- #48: reservation-cap slot-release semantics on force_settle->finalize
+  close are ambiguous between two readings.
+- #77: Appendix D fee formula conflicts with Appendix A parameters for
+  zero-G_n extrinsics.
+
+Until these are resolved upstream (or we find a canonical flop-core
+source), we do not implement open_channel/settle/force_settle/dispute
+runtime state, tariff computation, or settlement_class encoding, to
+avoid inventing protocol semantics.
+
 The canonical `channel_id` v1 primitive is implemented and internally
 verified against the public wire-format vector. The deterministic primitive
 binds the protocol/domain tag, version, genesis hash, agent, miner, and
 u64 little-endian nonce.
 
-This does **not** claim implementation or external verification of the
-compute-channel runtime lifecycle, including `open_channel`, `VerifiedTurn`,
-agent receipts, Merkle/session state, `settle`, or dispute/finalization
-semantics.
+VerifiedTurn V0–V3 verification, Merkle aggregation, and agent receipt v1
+are implemented and internally tested as part of CAT-1 (see the table
+above). This does **not** claim implementation or external verification of
+the runtime-side channel/session state: `open_channel`, `force_open`,
+`force_ack`, `settle`, `force_settle`, `dispute`, escrow state, or
+finalization semantics. These remain unimplemented under CAT-3 and are
+blocked on the upstream spec issues listed in "CAT-3 blocker: upstream spec
+ambiguity" above.
 
 ## External Parity Classification
 
