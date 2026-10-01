@@ -33,4 +33,7 @@ testpaths = [
     "test_processed_task_store.py",
     "test_validator_api.py",
     "test_validator_registry.py",
+    "test_compute_channel.py",
+    "test_rate_limit.py",
+    "test_testpaths_guard.py",
 ]
