@@ -117,6 +117,22 @@ ambiguity" above.
 | report_data construction / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Canonical DecodePolicy v1 encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 
+**Compute-channel negative vectors:** Rejection behavior matches the
+canonical negative vectors for the covered cases; however, internal
+exception names diverge from the spec's names (`DuplicateTurnIndex` vs
+`DuplicateVerifiedTurn`, `InvalidMerkleProof` vs `LeafNotInRoot`,
+`PolicyRequiredForCurrentChannel` vs `UnsupportedLeafVersion`). The
+internal `InvalidValidatorSignature` error is raised for an invalid
+VerifiedTurn enclave signature in `verify_turn_proof`; it is not the
+spec's `BadValidatorSignature`, which belongs to validator-attestation
+checking (`submit_validator_attestations/check_one`). The
+`invalid_validator_signature` negative case is only partially covered:
+the attestation path returns False rather than raising a named error,
+and the test uses a locally generated signature rather than the vector
+bytes. Negative cases `unknown_retention_enum`,
+`invalid_agent_ack_signature`, `legacy_leaf_current_channel` and
+`legacy_receipt_current_channel` are not yet covered.
+
 **Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
 
 # 3. ValidatorAttestation

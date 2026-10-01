@@ -3,17 +3,6 @@ import pytest
 from app.compute_channel import decode_fcc4_transcript
 
 
-def _canonical_fcc4_blob() -> bytes:
-    return bytes.fromhex(
-        "46434334"
-        "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
-        "01000000"
-        "03"
-        "ffffffff"
-        "33" * 32
-    )
-
-
 def test_compute_channel_module_imports():
     from app.compute_channel import FCC4_MAGIC, VerifiedTurnRecord
 

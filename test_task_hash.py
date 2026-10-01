@@ -5064,6 +5064,36 @@ def test_compute_channel_id_v1_changes_when_agent_changes():
     assert changed != canonical
 
 
+def test_compute_channel_id_v1_wrong_genesis_network_matches_negative_vector():
+    """wire-format-v1 negative case `wrong_genesis_network`: genesis[0] = 0x01."""
+    from app.crypto import compute_channel_id_v1
+
+    assert compute_channel_id_v1(
+        genesis_hash=bytes.fromhex(
+            "010102030405060708090a0b0c0d0e0f"
+            "101112131415161718191a1b1c1d1e1f"
+        ),
+        agent=bytes.fromhex("11" * 32),
+        miner=bytes.fromhex("22" * 32),
+        nonce=42,
+    ) == "f7b859ec27672aa1bbe6dfc0b4c0fbeddf50dddc2d107a73a7dab0b5435e758b"
+
+
+def test_compute_channel_id_v1_wrong_session_matches_negative_vector():
+    """wire-format-v1 negative case `wrong_session`: agent = 0x12 * 32."""
+    from app.crypto import compute_channel_id_v1
+
+    assert compute_channel_id_v1(
+        genesis_hash=bytes.fromhex(
+            "000102030405060708090a0b0c0d0e0f"
+            "101112131415161718191a1b1c1d1e1f"
+        ),
+        agent=bytes.fromhex("12" * 32),
+        miner=bytes.fromhex("22" * 32),
+        nonce=42,
+    ) == "1dbc63e202e92143b6d8299f7da687b2a9d08d9554a1a8a3e9c3b0ce88247180"
+
+
 def test_compute_channel_id_v1_changes_when_miner_changes():
     from app.crypto import compute_channel_id_v1
 
