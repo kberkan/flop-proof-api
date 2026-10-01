@@ -118,20 +118,43 @@ ambiguity" above.
 | Canonical DecodePolicy v1 encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 
 **Compute-channel negative vectors:** Rejection behavior matches the
-canonical negative vectors for the covered cases; however, internal
-exception names diverge from the spec's names (`DuplicateTurnIndex` vs
-`DuplicateVerifiedTurn`, `InvalidMerkleProof` vs `LeafNotInRoot`,
-`PolicyRequiredForCurrentChannel` vs `UnsupportedLeafVersion`). The
-internal `InvalidValidatorSignature` error is raised for an invalid
-VerifiedTurn enclave signature in `verify_turn_proof`; it is not the
-spec's `BadValidatorSignature`, which belongs to validator-attestation
-checking (`submit_validator_attestations/check_one`). The
-`invalid_validator_signature` negative case is only partially covered:
-the attestation path returns False rather than raising a named error,
-and the test uses a locally generated signature rather than the vector
-bytes. Negative cases `unknown_retention_enum`,
-`invalid_agent_ack_signature`, `legacy_leaf_current_channel` and
-`legacy_receipt_current_channel` are not yet covered.
+canonical negative vectors for the covered cases. `DuplicateVerifiedTurn` and
+`UnsupportedLeafVersion` now match the spec's exception names.
+`InvalidMerkleProof` still covers several conditions (path length > 64,
+malformed path item, `u32` index overflow, wrong orientation, root mismatch);
+the spec separates these into `MerklePathTooLong` and `LeafNotInRoot`, and
+that split has not been made yet. An invalid VerifiedTurn enclave signature
+raises the internal `InvalidEnclaveSignature`; the spec defines no name for
+this case, and it is not the spec's `BadValidatorSignature`, which belongs to
+validator-attestation checking (`submit_validator_attestations/check_one`).
+`legacy_leaf_current_channel` is now tested with the vector bytes; the pinned
+policy used is `0x66 * 32` (the generator binds no separate policy to this
+case), and because the policy check runs before signature and Merkle checks,
+the result does not depend on that value. `invalid_validator_signature` is
+only partially covered: the attestation path returns False rather than
+raising a named error, and the test uses a locally generated signature rather
+than the vector bytes. Not yet covered: `unknown_retention_enum`,
+`invalid_agent_ack_signature`, `legacy_receipt_current_channel`.
+
+**Known deviation:** for V0/V1 leaves, `verify_turn_proof` only checks
+`decode_policy_hash == 0`; the zero checks for `h_ids` and the TOPLOC
+commitment exist only in the FCC4 decoder.
+
+**CI coverage:** Compute-channel tests (`test_compute_channel.py`) were not
+part of the configured pytest suite or CI until commit `d92f6d7`. Earlier
+statements that this pipeline was internally tested were not enforced by the
+configured suite or CI; whether the file was run manually before this point
+is not recorded. From `d92f6d7` onward they run in CI (273 passed), and
+`test_testpaths_guard.py` fails if a root test file is missing from
+`testpaths`.
+
+**Vector revision:** The canonical V3 turn test uses the enclave
+key/signature pair (`b412…`/`94f2…`) from an earlier revision of
+`wire-format-v1.json` (flop-labs/yellowpaper `3eaf2f25bc`). Upstream commit
+`3c97bbc8d6` publishes a different valid pair (`207b…`/`2e60…`). Leaf hashes,
+the Merkle root/path and all non-signature FCC4 bytes are unchanged; only the
+enclave key and its randomized sr25519 signature differ, and both pairs verify
+against the same V3 leaf hash.
 
 **Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
 
@@ -399,7 +422,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 221 passed.
+**Current test baseline:** 273 passed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

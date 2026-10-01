@@ -125,7 +125,7 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **222 passed**
+Current regression status: **273 passed** (with the API server running on 127.0.0.1:8000)
 
 ## Canonical wire primitives
 
