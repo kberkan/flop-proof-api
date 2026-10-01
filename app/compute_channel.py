@@ -240,7 +240,7 @@ def verify_turn_proof(
         if turn.decode_policy_hash != zero:
             raise ValueError("LeafFieldsInconsistent")
         if expected_decode_policy_hash is not None:
-            raise ValueError("PolicyRequiredForCurrentChannel")
+            raise ValueError("UnsupportedLeafVersion")
     else:
         if turn.decode_policy_hash == zero:
             raise ValueError("LeafFieldsInconsistent")
@@ -274,7 +274,7 @@ def verify_turn_proof(
         turn.enclave_sig,
         leaf_hash,
     ):
-        raise ValueError("InvalidValidatorSignature")
+        raise ValueError("InvalidEnclaveSignature")
 
     if not verify_merkle_path(
         leaf_hash,
@@ -354,7 +354,7 @@ def verified_work_from_turns(
             raise ValueError("OutOfRangeTurnIndex")
 
         if turn.turn_index in seen_turn_indices:
-            raise ValueError("DuplicateTurnIndex")
+            raise ValueError("DuplicateVerifiedTurn")
         seen_turn_indices.add(turn.turn_index)
 
         if (
