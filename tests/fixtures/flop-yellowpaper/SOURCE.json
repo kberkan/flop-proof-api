@@ -1,0 +1,10 @@
+{
+  "repository": "flop-labs/yellowpaper",
+  "commit": "3c97bbc8d6ba68cf2ea003ab88bc154aafdf105e",
+  "path": "evidence/wire-format-v1.json",
+  "url": "https://raw.githubusercontent.com/flop-labs/yellowpaper/3c97bbc8d6ba68cf2ea003ab88bc154aafdf105e/evidence/wire-format-v1.json",
+  "sha256": "cdc2c4143de790a5aa71195dbce19fb520c9c26a4c9f4a399dd23fa9946f6948",
+  "size_bytes": 26596,
+  "license_note": "Not vendored. Upstream LICENSE applies CC BY 4.0 to the specification text; scope for evidence/ data is unclear; asked upstream in flop-labs/yellowpaper#99.",
+  "license_issue": "https://github.com/flop-labs/yellowpaper/issues/99"
+}

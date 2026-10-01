@@ -125,7 +125,23 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **291 passed** (with the API server running on 127.0.0.1:8000)
+Current regression status: **295 passed** (with the API server running on 127.0.0.1:8000)
+
+## Test vectors
+
+Some tests embed hash, preimage and signature values taken unchanged from
+[`evidence/wire-format-v1.json`](https://github.com/flop-labs/yellowpaper/blob/3c97bbc8d6ba68cf2ea003ab88bc154aafdf105e/evidence/wire-format-v1.json)
+in [flop-labs/yellowpaper](https://github.com/flop-labs/yellowpaper)
+(commit `3c97bbc8d6`; Copyright (c) 2026 FLOP Labs). The corpus itself is not copied into this
+repository. Its commit, URL, size and sha256 are pinned in
+`tests/fixtures/flop-yellowpaper/SOURCE.json`, and
+`python scripts/check_wire_vectors.py` downloads it and checks every embedded
+value (listed in `_embedded_wire_vectors.py`) against it.
+
+Upstream licenses the Yellow Paper specification text under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); whether that
+license covers the `evidence/` data is unclear; asked upstream in
+[flop-labs/yellowpaper#99](https://github.com/flop-labs/yellowpaper/issues/99).
 
 ## Canonical wire primitives
 

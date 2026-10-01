@@ -36,4 +36,5 @@ testpaths = [
     "test_compute_channel.py",
     "test_rate_limit.py",
     "test_testpaths_guard.py",
+    "test_wire_vectors_source.py",
 ]

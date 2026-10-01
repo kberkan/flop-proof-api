@@ -70,6 +70,9 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+      - name: Check embedded wire vectors against pinned upstream corpus
+        run: python scripts/check_wire_vectors.py
+
       - name: Show API server log
         if: always()
         run: |
