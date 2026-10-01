@@ -120,11 +120,12 @@ ambiguity" above.
 **Compute-channel negative vectors:** Rejection behavior matches the
 canonical negative vectors for the covered cases. `DuplicateVerifiedTurn` and
 `UnsupportedLeafVersion` now match the spec's exception names.
-`InvalidMerkleProof` still covers several conditions (path length > 64,
-malformed path item, `u32` index overflow, wrong orientation, root mismatch);
-the spec separates these into `MerklePathTooLong` and `LeafNotInRoot`, and
-that split has not been made yet. An invalid VerifiedTurn enclave signature
-raises the internal `InvalidEnclaveSignature`; the spec defines no name for
+A path longer than 64 items now raises `MerklePathTooLong`, and wrong
+orientation or root mismatch raises `LeafNotInRoot`; `InvalidMerkleProof`
+remains only for structural errors the spec does not name (malformed path
+item, `u32` index overflow). The `wrong_path_orientation` vector is now tested
+byte-exact at the `verify_turn_proof` layer. An invalid VerifiedTurn enclave
+signature raises the internal `InvalidEnclaveSignature`; the spec defines no name for
 this case, and it is not the spec's `BadValidatorSignature`, which belongs to
 validator-attestation checking (`submit_validator_attestations/check_one`).
 `legacy_leaf_current_channel` is now tested with the vector bytes; the pinned
@@ -136,9 +137,18 @@ raising a named error, and the test uses a locally generated signature rather
 than the vector bytes. Not yet covered: `unknown_retention_enum`,
 `invalid_agent_ack_signature`, `legacy_receipt_current_channel`.
 
-**Known deviation:** for V0/V1 leaves, `verify_turn_proof` only checks
-`decode_policy_hash == 0`; the zero checks for `h_ids` and the TOPLOC
-commitment exist only in the FCC4 decoder.
+`LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
+wire-format-v1 vector corpus (generator and JSON). The order of checks inside
+`verify_turn_proof` is not specified by the spec; the implemented order (field
+consistency and policy, signature, path length, path structure, Merkle
+membership) is an implementation choice.
+
+V0/V1 leaves with non-zero `h_ids` or TOPLOC commitment are rejected with
+`LeafFieldsInconsistent` during leaf hash computation (`app/crypto.py`), before
+signature and Merkle checks. Locked by
+`test_verify_turn_proof_rejects_legacy_leaf_with_nonzero_v3_field` in
+`test_compute_channel.py`. (An earlier revision of this document incorrectly
+listed this as a known deviation.)
 
 **CI coverage:** Compute-channel tests (`test_compute_channel.py`) were not
 part of the configured pytest suite or CI until commit `d92f6d7`. Earlier
@@ -422,7 +432,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 273 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 285 passed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
