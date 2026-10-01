@@ -109,13 +109,23 @@ ambiguity" above.
 | task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED |
-| ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
-| sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+| ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
+| sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Quorum arithmetic (`ceil(active_count × threshold).max(1)`) | IMPLEMENTED (internal-test-verified) | N/A — protocol-defined arithmetic; no runtime-specific byte-level parity claim |
 | model_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | output_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | report_data construction / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Canonical DecodePolicy v1 encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+
+**Direct-rail ValidatorAttestation vectors:** Verified against
+flop-labs/yellowpaper `wire-format-v1.json` `direct_rail_v1` at commit
+`3c97bbc8d6`: the 179-byte signable payload and 275-byte SCALE encoding match
+byte-for-byte, and the published validator signature verifies. The corpus
+generation metadata lists a single signature-generation command, an upstream
+Rust SDK example (`sdk/rust-compute-channel`). This suggests the published
+signature was produced by a separate implementation, but the metadata does not
+attribute individual signatures to that command. It is not verification
+against a live FLOP runtime.
 
 **Compute-channel negative vectors:** Rejection behavior matches the
 canonical negative vectors for the covered cases. `DuplicateVerifiedTurn` and
@@ -131,11 +141,13 @@ validator-attestation checking (`submit_validator_attestations/check_one`).
 `legacy_leaf_current_channel` is now tested with the vector bytes; the pinned
 policy used is `0x66 * 32` (the generator binds no separate policy to this
 case), and because the policy check runs before signature and Merkle checks,
-the result does not depend on that value. `invalid_validator_signature` is
-only partially covered: the attestation path returns False rather than
-raising a named error, and the test uses a locally generated signature rather
-than the vector bytes. Not yet covered: `unknown_retention_enum`,
-`invalid_agent_ack_signature`, `legacy_receipt_current_channel`.
+the result does not depend on that value. `legacy_receipt_current_channel` is
+now tested with the vector bytes and is rejected with `BadReceiptSignature`;
+its control tests monkeypatch `verified_work_from_turns`, so they prove only
+the receipt-signature layer. `invalid_validator_signature` is now tested with
+the upstream vector bytes; the only remaining difference is that the spec
+uses the name `BadValidatorSignature`, while our function returns False. Not
+yet covered: `unknown_retention_enum`, `invalid_agent_ack_signature`.
 
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
@@ -164,7 +176,10 @@ key/signature pair (`b412…`/`94f2…`) from an earlier revision of
 `3c97bbc8d6` publishes a different valid pair (`207b…`/`2e60…`). Leaf hashes,
 the Merkle root/path and all non-signature FCC4 bytes are unchanged; only the
 enclave key and its randomized sr25519 signature differ, and both pairs verify
-against the same V3 leaf hash.
+against the same V3 leaf hash. The direct-rail validator values also changed
+between upstream revisions (`3eaf2f25bc`: `b41236c5…`/`90cdb722…` →
+`3c97bbc8d6`: `28cc07a9…`/`729d579c…`); the validator vector tests use
+`3c97bbc8d6`.
 
 **Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
 
@@ -173,9 +188,9 @@ against the same V3 leaf hash.
 | Capability | Status | Risk | Exact nuance | Evidence |
 |---|---:|---:|---|---|
 | 12-field representation | 🟢 | LOW | Required fields represented | SPEC-CONFORMANT; INTERNALLY TESTED |
-| First 10 fields signed | 🟢 | LOW | 179-byte signed subset | SPEC-CONFORMANT; INTERNALLY TESTED |
-| Full SCALE representation | 🟢 | LOW | 275 B contract | SPEC-CONFORMANT; INTERNALLY TESTED |
-| sr25519 signatures | 🟢 | LOW | Signature verification implemented | SPEC-CONFORMANT; INTERNALLY TESTED |
+| First 10 fields signed | 🟢 | LOW | 179-byte signed subset | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 3c97bbc8d6) |
+| Full SCALE representation | 🟢 | LOW | 275 B contract | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 3c97bbc8d6) |
+| sr25519 signatures | 🟢 | LOW | Signature verification implemented | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 3c97bbc8d6) |
 | Exact tuple agreement | 🟢 | LOW | Required signed fields agree | SPEC-CONFORMANT; INTERNALLY TESTED |
 | Distinct-validator quorum | 🟢 | LOW | Internally verified quorum behavior | SPEC-CONFORMANT; INTERNALLY TESTED |
 | Quorum formula | 🟢 | LOW | ceil(active_count × threshold).max(1) | SPEC-CONFORMANT; INTERNALLY TESTED |
@@ -183,7 +198,8 @@ against the same V3 leaf hash.
 | Runtime unsigned inherent | 🔴 | HIGH | CAT-3 — runtime/chain state; HTTP analogue is not runtime inherent | NOT IMPLEMENTED |
 | Runtime settlement | 🔴 | HIGH | CAT-3 — runtime/chain state; No runtime credit/event | NOT IMPLEMENTED |
 
-**Important:** 179 B / 275 B / sr25519 / quorum claims are internally tested, not externally empirically verified against the real FLOP runtime.
+**Important:** The 179 B signable payload, 275 B SCALE encoding and sr25519 signature verification are verified against the upstream canonical wire vector (direct_rail_v1). Quorum arithmetic is internally tested only. None of these are verified against a live FLOP runtime.
+
 # 4. Validator Evidence / TEE
 
 | Capability | Status | Risk | Exact nuance |
@@ -432,7 +448,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 285 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 291 passed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
@@ -441,7 +457,7 @@ When implementation changes:
 | Yellow Paper definition of hp_poui::flop_meter | VERIFIED |
 | Reference path specified by Yellow Paper | VERIFIED — specification path only; source artifact not retrieved |
 | Exact official source artifact retrieved | NO |
-| Exact official KAT vectors retrieved | NO |
+| Exact official KAT vectors retrieved | NO (G_n meter / hp_poui::flop_meter only; wire-format vectors are covered elsewhere in this document) |
 | Independent empirical verification | NO |
 | Canonical G_n meter implementation | GAP |
 
