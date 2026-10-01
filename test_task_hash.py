@@ -5146,3 +5146,103 @@ def test_compute_channel_id_v1_changes_when_nonce_changes():
     )
 
     assert changed != canonical
+
+
+
+# wire-format-v1 `direct_rail_v1` and negative case `invalid_validator_signature`,
+# copied verbatim from flop-labs/yellowpaper@3c97bbc8d6
+# evidence/wire-format-v1.json.
+DIRECT_RAIL_SIGNABLE_HEX = (
+    "8d06cbf826718cda29c2ec2aa363ea13cebc118947eed5fa5d4dbb364357920d"
+    "2a00000000000000f40100000000000002020202020202020202020202020202"
+    "0202020202020202020202020202020203030303030303030303030303030303"
+    "03030303030303030303030303030303be572af01bd68df9c660da094b779624"
+    "4dd29435d532c63c9f42efe6bdabd79600010104040404040404040404040404"
+    "04040404040404040404040404040404040404"
+)
+
+DIRECT_RAIL_VALIDATOR_ID_HEX = (
+    "28cc07a97ff218ae057724f5d860f1ac5bcb9a1e907d141b2d6c06116a7ecf5c"
+)
+
+DIRECT_RAIL_VALIDATOR_SIGNATURE_HEX = (
+    "729d579cd385954df683730ce83bc81f18c30838d434b890ef05efb29b3ebf42"
+    "1a93d4e01f57e0ecb4036b23b55c2c5b23bd84eaa912fbd724ceb3dde8533682"
+)
+
+DIRECT_RAIL_SCALE_HEX = (
+    "8d06cbf826718cda29c2ec2aa363ea13cebc118947eed5fa5d4dbb364357920d"
+    "2a00000000000000f40100000000000002020202020202020202020202020202"
+    "0202020202020202020202020202020203030303030303030303030303030303"
+    "03030303030303030303030303030303be572af01bd68df9c660da094b779624"
+    "4dd29435d532c63c9f42efe6bdabd79600010104040404040404040404040404"
+    "0404040404040404040404040404040404040428cc07a97ff218ae057724f5d8"
+    "60f1ac5bcb9a1e907d141b2d6c06116a7ecf5c729d579cd385954df683730ce8"
+    "3bc81f18c30838d434b890ef05efb29b3ebf421a93d4e01f57e0ecb4036b23b5"
+    "5c2c5b23bd84eaa912fbd724ceb3dde8533682"
+)
+
+INVALID_VALIDATOR_SIGNATURE_HEX = (
+    "739d579cd385954df683730ce83bc81f18c30838d434b890ef05efb29b3ebf42"
+    "1a93d4e01f57e0ecb4036b23b55c2c5b23bd84eaa912fbd724ceb3dde8533682"
+)
+
+
+def _direct_rail_attestation_fields() -> dict:
+    return {
+        "task_hash": bytes.fromhex("8d06cbf826718cda29c2ec2aa363ea13cebc118947eed5fa5d4dbb364357920d"),
+        "gn_weight": 42,
+        "latency_ms": 500,
+        "model_hash": bytes.fromhex("0202020202020202020202020202020202020202020202020202020202020202"),
+        "output_hash": bytes.fromhex("0303030303030303030303030303030303030303030303030303030303030303"),
+        "decode_policy_hash": bytes.fromhex(
+            "be572af01bd68df9c660da094b7796244dd29435d532c63c9f42efe6bdabd796"
+        ),
+        "tee_type": 0,
+        "quote_verified": True,
+        "event_log_verified": True,
+        "hardware_id_hash": bytes.fromhex("0404040404040404040404040404040404040404040404040404040404040404"),
+    }
+
+
+def test_validator_attestation_encoding_matches_direct_rail_vector():
+    from app.crypto import (
+        ValidatorAttestation,
+        encode_validator_attestation_scale,
+        encode_validator_attestation_signable_payload,
+    )
+
+    fields = _direct_rail_attestation_fields()
+
+    assert encode_validator_attestation_signable_payload(**fields) == bytes.fromhex(
+        DIRECT_RAIL_SIGNABLE_HEX
+    )
+    assert encode_validator_attestation_scale(
+        ValidatorAttestation(
+            **fields,
+            validator_id=bytes.fromhex(DIRECT_RAIL_VALIDATOR_ID_HEX),
+            signature=bytes.fromhex(DIRECT_RAIL_VALIDATOR_SIGNATURE_HEX),
+        )
+    ) == bytes.fromhex(DIRECT_RAIL_SCALE_HEX)
+
+
+def test_validator_attestation_signature_accepts_direct_rail_vector_control():
+    from app.crypto import verify_validator_attestation_signature
+
+    assert verify_validator_attestation_signature(
+        public_key=bytes.fromhex(DIRECT_RAIL_VALIDATOR_ID_HEX),
+        signature=bytes.fromhex(DIRECT_RAIL_VALIDATOR_SIGNATURE_HEX),
+        **_direct_rail_attestation_fields(),
+    ) is True
+
+
+def test_validator_attestation_signature_rejects_invalid_signature_vector():
+    """Negative case `invalid_validator_signature`. The spec name is
+    BadValidatorSignature; this function reports rejection as False."""
+    from app.crypto import verify_validator_attestation_signature
+
+    assert verify_validator_attestation_signature(
+        public_key=bytes.fromhex(DIRECT_RAIL_VALIDATOR_ID_HEX),
+        signature=bytes.fromhex(INVALID_VALIDATOR_SIGNATURE_HEX),
+        **_direct_rail_attestation_fields(),
+    ) is False

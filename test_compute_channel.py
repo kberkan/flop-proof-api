@@ -969,3 +969,94 @@ def test_verify_turn_proof_rejects_u32_overflow_turn_index():
 
     with pytest.raises(ValueError, match="turn_index must fit in u32"):
         verify_turn_proof(**kwargs)
+
+
+# wire-format-v1 `compute_channel_v1.receipt` and negative case
+# `legacy_receipt_current_channel`, copied verbatim from
+# flop-labs/yellowpaper@3c97bbc8d6 evidence/wire-format-v1.json.
+RECEIPT_V1_SIGNATURE_HEX = (
+    "7803f98d0297c23f5df90f4bce093492de9658045d3d2296717a1e718e8bc40d"
+    "891e60e517fdc459f59140b289d9fcba90809493875b5d8e77325b0ec9572683"
+)
+
+LEGACY_RECEIPT_CURRENT_CHANNEL_HEX = (
+    "1111111111111111111111111111111111111111111111111111111111111111"
+    "2222222222222222222222222222222222222222222222222222222222222222"
+    "2a000000000000000000000000000000e8030000000000000000000000000000"
+    "a0f54ce7f97e6e8e76a4ddf6b8785ec5efd243b4a335b7954504a5c19faee620"
+    "e881741ae3cfbb56cd503d17e91cd5406ffc1a8d7478108854cd781aade52687"
+)
+
+RECEIPT_PUBLIC_KEY = bytes.fromhex(
+    "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+)
+
+
+def _vector_receipt_kwargs(agent_receipt_sig: bytes) -> dict:
+    return {
+        "channel_id": bytes.fromhex("1111111111111111111111111111111111111111111111111111111111111111"),
+        "final_root": bytes.fromhex("2222222222222222222222222222222222222222222222222222222222222222"),
+        "aggregate_gn": 42,
+        "payable": 1000,
+        "agent_public_key": RECEIPT_PUBLIC_KEY,
+        "agent_receipt_sig": agent_receipt_sig,
+        "turn_proofs": (),
+        "enclave_public_key": bytes.fromhex("33" * 32),
+    }
+
+
+def _split_legacy_receipt_vector() -> tuple[bytes, bytes]:
+    """Vector bytes are the unprefixed 96 B receipt preimage || 64 B signature."""
+    blob = bytes.fromhex(LEGACY_RECEIPT_CURRENT_CHANNEL_HEX)
+    assert len(blob) == 160
+    return blob[:96], blob[96:]
+
+
+def test_verify_receipt_rejects_legacy_receipt_on_current_channel(monkeypatch):
+    """Negative case `legacy_receipt_current_channel`: a signature over the
+    receipt preimage without the "FLOP/COMPUTE_CHANNEL/RECEIPT" || 01 prefix."""
+    import app.compute_channel as cc
+
+    monkeypatch.setattr(
+        cc,
+        "verified_work_from_turns",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("turn collection must not run")
+        ),
+    )
+
+    _, legacy_sig = _split_legacy_receipt_vector()
+
+    with pytest.raises(ValueError, match="BadReceiptSignature"):
+        cc.verify_receipt(**_vector_receipt_kwargs(legacy_sig))
+
+
+def test_legacy_receipt_vector_differs_from_v1_only_by_prefix_control():
+    """Control: the legacy signature is a genuine signature by the same key over
+    the same inputs; only the receipt domain/version prefix is missing."""
+    import sr25519
+
+    from app.crypto import compute_agent_receipt_v1_signable_payload
+
+    legacy_preimage, legacy_sig = _split_legacy_receipt_vector()
+    kwargs = _vector_receipt_kwargs(legacy_sig)
+    v1_payload = compute_agent_receipt_v1_signable_payload(
+        channel_id=kwargs["channel_id"],
+        final_root=kwargs["final_root"],
+        aggregate_gn=kwargs["aggregate_gn"],
+        payable=kwargs["payable"],
+    )
+
+    assert v1_payload == b"FLOP/COMPUTE_CHANNEL/RECEIPT\x01" + legacy_preimage
+    assert sr25519.verify(legacy_sig, legacy_preimage, RECEIPT_PUBLIC_KEY)
+
+
+def test_verify_receipt_accepts_v1_receipt_vector_control(monkeypatch):
+    """Control: same key and inputs with the prefixed v1 receipt are accepted."""
+    import app.compute_channel as cc
+
+    monkeypatch.setattr(cc, "verified_work_from_turns", lambda **kwargs: 42)
+
+    assert cc.verify_receipt(
+        **_vector_receipt_kwargs(bytes.fromhex(RECEIPT_V1_SIGNATURE_HEX))
+    ) == 42
