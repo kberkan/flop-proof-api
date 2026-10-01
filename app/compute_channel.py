@@ -10,6 +10,10 @@ from app.crypto import (
     verify_merkle_path,
 )
 FCC4_MAGIC = b"FCC4"
+# channel_max_merkle_path_len from params/flop-protocol-params.yaml
+# (flop-labs/yellowpaper@3c97bbc8d6). Duplicates the hard-coded 64 in
+# app.crypto.verify_merkle_path.
+CHANNEL_MAX_MERKLE_PATH_LEN = 64
 H256_SIZE = 32
 SR25519_SIGNATURE_SIZE = 64
 MAX_TURNS = 1024
@@ -276,13 +280,35 @@ def verify_turn_proof(
     ):
         raise ValueError("InvalidEnclaveSignature")
 
+    # The spec does not define a check order. Path length goes first among
+    # the path checks so an over-long path is rejected before any of it is
+    # inspected or hashed.
+    if len(merkle_path) > CHANNEL_MAX_MERKLE_PATH_LEN:
+        raise ValueError("MerklePathTooLong")
+
+    # Structural errors the spec does not name stay InvalidMerkleProof, so
+    # that a False from verify_merkle_path below can only mean non-membership.
+    for item in merkle_path:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise ValueError("InvalidMerkleProof")
+        sibling, sibling_is_left = item
+        if (
+            not isinstance(sibling, bytes)
+            or len(sibling) != H256_SIZE
+            or not isinstance(sibling_is_left, bool)
+        ):
+            raise ValueError("InvalidMerkleProof")
+
+    if merkle_index > 2**32 - 1:
+        raise ValueError("InvalidMerkleProof")
+
     if not verify_merkle_path(
         leaf_hash,
         merkle_index,
         list(merkle_path),
         expected_root,
     ):
-        raise ValueError("InvalidMerkleProof")
+        raise ValueError("LeafNotInRoot")
 
     return leaf_hash
 

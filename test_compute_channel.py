@@ -748,12 +748,224 @@ def test_verify_turn_proof_rejects_flipped_enclave_signature():
 
 
 def test_verify_turn_proof_rejects_wrong_path_orientation():
-    """Locks current behaviour: wrong orientation -> InvalidMerkleProof."""
+    """Wrong orientation -> LeafNotInRoot (wire-format-v1 negative vector)."""
     from app.compute_channel import verify_turn_proof
 
     kwargs = _canonical_v3_turn_proof_kwargs()
     first, (sibling, sibling_is_left) = kwargs["merkle_path"]
     kwargs["merkle_path"] = (first, (sibling, not sibling_is_left))
 
+    with pytest.raises(ValueError, match="LeafNotInRoot"):
+        verify_turn_proof(**kwargs)
+
+
+# wire-format-v1 negative case `wrong_path_orientation`, copied verbatim
+# from flop-labs/yellowpaper@3c97bbc8d6 evidence/wire-format-v1.json.
+WRONG_PATH_ORIENTATION_HEX = (
+    "03ffffffff333333333333333333333333333333333333333333333333333333"
+    "3333333333444444444444444444444444444444444444444444444444444444"
+    "4444444444ffffffffffffffffffffffffffffffff6666666666666666666666"
+    "666666666666666666666666666666666666666666368e6eca01b76a510619dc"
+    "2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777777777777777777777"
+    "777777777777777777777777777777777777777777fdfffffffffffffffeffff"
+    "ffffffffff01000000000000002e60e88466a203e1c106a6dfca39276cf97556"
+    "c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a6f64b9513d086f2ade"
+    "15c90979e870fc2162c07d2f8d088ca5d489cec0a255a48a2e3c2149d8028597"
+    "e03ea78628d9a3672ddb80df286900482735fe0838313af87270c7fa678a8fb6"
+    "c3cf9d9e3af35b8c73ea39f279a92a00"
+)
+
+# Upstream channel_max_merkle_path_len (params/flop-protocol-params.yaml).
+CHANNEL_MAX_MERKLE_PATH_LEN = 64
+
+
+def _canonical_path_of_length(length: int) -> tuple:
+    """Well-formed path for merkle_index 2 with orientation bits respected.
+
+    The first two items are the canonical siblings; the rest are filler
+    right-hand siblings, so only the length (and therefore the root) differs.
+    """
+    canonical = _canonical_v3_turn_proof_kwargs()["merkle_path"]
+    filler = (bytes.fromhex("5a" * 32), False)
+    return canonical + (filler,) * (length - len(canonical))
+
+
+def test_verify_turn_proof_rejects_path_longer_than_max():
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    kwargs["merkle_path"] = _canonical_path_of_length(
+        CHANNEL_MAX_MERKLE_PATH_LEN + 1
+    )
+
+    with pytest.raises(ValueError, match="MerklePathTooLong"):
+        verify_turn_proof(**kwargs)
+
+
+def test_verify_turn_proof_max_length_path_is_not_too_long():
+    """A 64-item path is within the bound; it fails only because the root
+    no longer matches, so the expected error is LeafNotInRoot."""
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    kwargs["merkle_path"] = _canonical_path_of_length(CHANNEL_MAX_MERKLE_PATH_LEN)
+
+    with pytest.raises(ValueError, match="LeafNotInRoot"):
+        verify_turn_proof(**kwargs)
+
+
+def test_verify_turn_proof_wrong_path_orientation_matches_negative_vector():
+    """Context from the upstream generator: canonical channel_id, Merkle tree
+    [V1, V2, V3] with the V3 turn at index 2, enclave key 207b..., and the
+    turn's own decode policy 0x66 * 32 as the channel policy.
+    """
+    from app.compute_channel import verify_turn_proof
+
+    blob = bytes.fromhex(WRONG_PATH_ORIENTATION_HEX)
+    assert len(blob) == 336
+
+    turn, merkle_path = _decode_verified_turn_scale(blob)
+    assert turn.leaf_version == 3
+
+    with pytest.raises(ValueError, match="LeafNotInRoot"):
+        verify_turn_proof(
+            channel_id=bytes.fromhex(
+                "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+            ),
+            turn=turn,
+            merkle_index=2,
+            merkle_path=merkle_path,
+            expected_root=bytes.fromhex(
+                "1020281304e2677e48c1093e7f5069fc8fbff1ea82daf2ac5b2b49d7cef756ed"
+            ),
+            enclave_public_key=bytes.fromhex(
+                "207b3ee770b7213b7e76bdb32702e2e166a8fea8a125613d6e98c765f5a06d40"
+            ),
+            expected_decode_policy_hash=bytes.fromhex("66" * 32),
+        )
+
+
+def test_verify_turn_proof_rejects_wrong_root():
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    kwargs["expected_root"] = bytes.fromhex("ab" * 32)
+
+    with pytest.raises(ValueError, match="LeafNotInRoot"):
+        verify_turn_proof(**kwargs)
+
+
+def test_verify_turn_proof_rejects_malformed_path_item():
+    """Locks remaining InvalidMerkleProof meaning: malformed path item."""
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    (sibling, sibling_is_left), second = kwargs["merkle_path"]
+    kwargs["merkle_path"] = ((sibling[:31], sibling_is_left), second)
+
     with pytest.raises(ValueError, match="InvalidMerkleProof"):
+        verify_turn_proof(**kwargs)
+
+
+def test_verify_turn_proof_rejects_u32_overflow_merkle_index():
+    """Locks remaining InvalidMerkleProof meaning: index beyond u32.
+
+    The u32 range check lives in verify_merkle_path, which receives
+    merkle_index (not turn.turn_index) as its turn index.
+    """
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    kwargs["merkle_index"] = 2**32
+
+    with pytest.raises(ValueError, match="InvalidMerkleProof"):
+        verify_turn_proof(**kwargs)
+
+
+def _signed_single_leaf_turn_proof_kwargs(leaf_version: int, **overrides) -> dict:
+    """V0/V1 turn signed with a local sr25519 key in a single-leaf tree.
+
+    The V0/V1 leaf preimage omits decode_policy_hash, h_ids and the TOPLOC
+    commitment, so overriding those fields keeps signature and Merkle valid.
+    """
+    import sr25519
+
+    from app.compute_channel import VerifiedTurnRecord
+    from app.crypto import compute_verified_turn_leaf_v0_v1_v2_v3
+
+    channel_id = bytes.fromhex(
+        "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+    )
+    fields = {
+        "leaf_version": leaf_version,
+        "turn_index": 0,
+        "h_in": bytes.fromhex("33" * 32),
+        "h_out": bytes.fromhex("44" * 32),
+        "g_n": 42,
+        "decode_policy_hash": bytes(32),
+        "h_ids": bytes(32),
+        "toploc_commitment_hash": bytes(32),
+        "miner_recv_ms": 1 if leaf_version == 1 else 0,
+        "miner_done_ms": 2 if leaf_version == 1 else 0,
+        "latency_ms": 1 if leaf_version == 1 else 0,
+    }
+    leaf_hash = bytes.fromhex(
+        compute_verified_turn_leaf_v0_v1_v2_v3(channel_id=channel_id, **fields)
+    )
+    public_key, private_key = sr25519.pair_from_seed(bytes(range(32)))
+    enclave_sig = sr25519.sign((public_key, private_key), leaf_hash)
+
+    fields.update(overrides)
+    return {
+        "channel_id": channel_id,
+        "turn": VerifiedTurnRecord(enclave_sig=enclave_sig, agent_ack=None, **fields),
+        "merkle_index": 0,
+        "merkle_path": (),
+        "expected_root": leaf_hash,
+        "enclave_public_key": public_key,
+        "expected_decode_policy_hash": None,
+    }
+
+
+@pytest.mark.parametrize("leaf_version", [0, 1])
+def test_verify_turn_proof_accepts_consistent_legacy_leaf_control(leaf_version):
+    """Control: the signed V0/V1 fixture is valid when its V3 fields are zero."""
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _signed_single_leaf_turn_proof_kwargs(leaf_version)
+
+    assert verify_turn_proof(**kwargs) == kwargs["expected_root"]
+
+
+@pytest.mark.parametrize(
+    ("leaf_version", "field"),
+    [
+        (1, "h_ids"),
+        (1, "toploc_commitment_hash"),
+        (0, "h_ids"),
+    ],
+)
+def test_verify_turn_proof_rejects_legacy_leaf_with_nonzero_v3_field(
+    leaf_version, field
+):
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _signed_single_leaf_turn_proof_kwargs(
+        leaf_version, **{field: bytes.fromhex("99" * 32)}
+    )
+
+    with pytest.raises(ValueError, match="LeafFieldsInconsistent"):
+        verify_turn_proof(**kwargs)
+
+
+def test_verify_turn_proof_rejects_u32_overflow_turn_index():
+    """turn.turn_index beyond u32 fails during leaf hash computation."""
+    from dataclasses import replace
+
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    kwargs["turn"] = replace(kwargs["turn"], turn_index=2**32)
+
+    with pytest.raises(ValueError, match="turn_index must fit in u32"):
         verify_turn_proof(**kwargs)
