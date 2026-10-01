@@ -57,8 +57,8 @@ def test_fcc4_canonical_public_vector_decodes_exactly():
         "fdffffffffffffff"
         "feffffffffffffff"
         "0100000000000000"
-        "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
-        "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+        "2e60e88466a203e1c106a6dfca39276cf97556c3af971f48c4da8845cc23e068"
+        "cbbcaf63aa20672cd21a6f64b9513d086f2ade15c90979e870fc2162c07d2f8d"
         "00"
     )
 
@@ -86,8 +86,8 @@ def test_fcc4_canonical_public_vector_decodes_exactly():
     assert turn.miner_done_ms == 2**64 - 2
     assert turn.latency_ms == 1
     assert turn.enclave_sig == bytes.fromhex(
-        "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
-        "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+        "2e60e88466a203e1c106a6dfca39276cf97556c3af971f48c4da8845cc23e068"
+        "cbbcaf63aa20672cd21a6f64b9513d086f2ade15c90979e870fc2162c07d2f8d"
     )
     assert turn.agent_ack is None
 
@@ -107,8 +107,8 @@ def _canonical_fcc4_blob() -> bytes:
         "fdffffffffffffff"
         "feffffffffffffff"
         "0100000000000000"
-        "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
-        "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+        "2e60e88466a203e1c106a6dfca39276cf97556c3af971f48c4da8845cc23e068"
+        "cbbcaf63aa20672cd21a6f64b9513d086f2ade15c90979e870fc2162c07d2f8d"
         "00"
     )
 
@@ -214,8 +214,8 @@ def test_verify_turn_proof_matches_public_canonical_v3_vector():
         miner_done_ms=2**64 - 2,
         latency_ms=1,
         enclave_sig=bytes.fromhex(
-            "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
-            "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+            "2e60e88466a203e1c106a6dfca39276cf97556c3af971f48c4da8845cc23e068"
+            "cbbcaf63aa20672cd21a6f64b9513d086f2ade15c90979e870fc2162c07d2f8d"
         ),
         agent_ack=None,
     )
@@ -240,7 +240,7 @@ def test_verify_turn_proof_matches_public_canonical_v3_vector():
     )
 
     public_key = bytes.fromhex(
-        "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+        "207b3ee770b7213b7e76bdb32702e2e166a8fea8a125613d6e98c765f5a06d40"
     )
 
     leaf_hash = verify_turn_proof(
@@ -701,8 +701,8 @@ def _canonical_v3_turn_proof_kwargs() -> dict:
             miner_done_ms=2**64 - 2,
             latency_ms=1,
             enclave_sig=bytes.fromhex(
-                "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
-                "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+                "2e60e88466a203e1c106a6dfca39276cf97556c3af971f48c4da8845cc23e068"
+                "cbbcaf63aa20672cd21a6f64b9513d086f2ade15c90979e870fc2162c07d2f8d"
             ),
             agent_ack=None,
         ),
@@ -725,7 +725,7 @@ def _canonical_v3_turn_proof_kwargs() -> dict:
             "1020281304e2677e48c1093e7f5069fc8fbff1ea82daf2ac5b2b49d7cef756ed"
         ),
         "enclave_public_key": bytes.fromhex(
-            "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+            "207b3ee770b7213b7e76bdb32702e2e166a8fea8a125613d6e98c765f5a06d40"
         ),
         "expected_decode_policy_hash": bytes.fromhex("66" * 32),
     }
@@ -1060,3 +1060,52 @@ def test_verify_receipt_accepts_v1_receipt_vector_control(monkeypatch):
     assert cc.verify_receipt(
         **_vector_receipt_kwargs(bytes.fromhex(RECEIPT_V1_SIGNATURE_HEX))
     ) == 42
+
+
+# wire-format-v1 `compute_channel_v1.fcc4_transcript_blob_hex` and
+# `compute_channel_v1.verified_turn_v3_scale_hex`, copied verbatim from
+# flop-labs/yellowpaper@3c97bbc8d6 evidence/wire-format-v1.json.
+FCC4_TRANSCRIPT_BLOB_HEX = (
+    "464343343655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49"
+    "d66e8d280100000003ffffffff33333333333333333333333333333333333333"
+    "3333333333333333333333333344444444444444444444444444444444444444"
+    "44444444444444444444444444ffffffffffffffffffffffffffffffff016666"
+    "666666666666666666666666666666666666666666666666666666666666368e"
+    "6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777"
+    "777777777777777777777777777777777777777777777777777777777777fdff"
+    "fffffffffffffeffffffffffffff01000000000000002e60e88466a203e1c106"
+    "a6dfca39276cf97556c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a"
+    "6f64b9513d086f2ade15c90979e870fc2162c07d2f8d00"
+)
+
+VERIFIED_TURN_V3_SCALE_HEX = (
+    "03ffffffff333333333333333333333333333333333333333333333333333333"
+    "3333333333444444444444444444444444444444444444444444444444444444"
+    "4444444444ffffffffffffffffffffffffffffffff6666666666666666666666"
+    "666666666666666666666666666666666666666666368e6eca01b76a510619dc"
+    "2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777777777777777777777"
+    "777777777777777777777777777777777777777777fdfffffffffffffffeffff"
+    "ffffffffff01000000000000002e60e88466a203e1c106a6dfca39276cf97556"
+    "c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a6f64b9513d086f2ade"
+    "15c90979e870fc2162c07d2f8d088ca5d489cec0a255a48a2e3c2149d8028597"
+    "e03ea78628d9a3672ddb80df286900482735fe0838313af87270c7fa678a8fb6"
+    "c3cf9d9e3af35b8c73ea39f279a92a01"
+)
+
+
+def test_canonical_fcc4_blob_matches_upstream_vector_byte_for_byte():
+    assert _canonical_fcc4_blob() == bytes.fromhex(FCC4_TRANSCRIPT_BLOB_HEX)
+
+
+def test_verify_turn_proof_accepts_upstream_verified_turn_v3_vector():
+    from app.compute_channel import verify_turn_proof
+
+    turn, merkle_path = _decode_verified_turn_scale(
+        bytes.fromhex(VERIFIED_TURN_V3_SCALE_HEX)
+    )
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    assert (turn, merkle_path) == (kwargs["turn"], kwargs["merkle_path"])
+
+    assert verify_turn_proof(**kwargs) == bytes.fromhex(
+        "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+    )

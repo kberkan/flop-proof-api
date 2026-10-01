@@ -170,16 +170,22 @@ is not recorded. From `d92f6d7` onward they run in CI (273 passed), and
 `test_testpaths_guard.py` fails if a root test file is missing from
 `testpaths`.
 
-**Vector revision:** The canonical V3 turn test uses the enclave
-key/signature pair (`b412…`/`94f2…`) from an earlier revision of
-`wire-format-v1.json` (flop-labs/yellowpaper `3eaf2f25bc`). Upstream commit
-`3c97bbc8d6` publishes a different valid pair (`207b…`/`2e60…`). Leaf hashes,
-the Merkle root/path and all non-signature FCC4 bytes are unchanged; only the
-enclave key and its randomized sr25519 signature differ, and both pairs verify
-against the same V3 leaf hash. The direct-rail validator values also changed
+**Vector revision:** The canonical V3 turn tests use the enclave
+key/signature pair (`207b…`/`2e60…`) published at upstream commit
+`3c97bbc8d6`, and the test FCC4 transcript blob matches that commit's
+`fcc4_transcript_blob_hex` byte-for-byte. Earlier revisions of these tests used
+the pair (`b412…`/`94f2…`) from an earlier revision of `wire-format-v1.json`
+(flop-labs/yellowpaper `3eaf2f25bc`). Leaf hashes, the Merkle root/path and all
+non-signature FCC4 bytes are the same in both revisions; only the enclave key
+and its randomized sr25519 signature differ, and both pairs verify against the
+same V3 leaf hash. `b412…` remains in use as the agent receipt key, which is
+unchanged upstream. The direct-rail validator values also changed
 between upstream revisions (`3eaf2f25bc`: `b41236c5…`/`90cdb722…` →
 `3c97bbc8d6`: `28cc07a9…`/`729d579c…`); the validator vector tests use
-`3c97bbc8d6`.
+`3c97bbc8d6`. `scripts/check_wire_vectors.py` checks only the values registered
+in `_embedded_wire_vectors.py`. An upstream value embedded in a test but not
+registered there is not checked; the stale enclave pair in `test_task_hash.py`
+was found by manual search, not by the script.
 
 **Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
 
@@ -448,7 +454,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 295 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 297 passed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

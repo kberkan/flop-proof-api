@@ -4865,11 +4865,11 @@ def test_verified_turn_v3_signature_matches_public_canonical_vector():
     )
 
     public_key = bytes.fromhex(
-        "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+        "207b3ee770b7213b7e76bdb32702e2e166a8fea8a125613d6e98c765f5a06d40"
     )
     signature = bytes.fromhex(
-        "94f2f8b99c2080051b431786b410153a928c37eff5054d6e2ab5a109f4a69148"
-        "d9113049764e517c2f9a1a8122a606a8366370f59440d3aabbfc289aeea72086"
+        "2e60e88466a203e1c106a6dfca39276cf97556c3af971f48c4da8845cc23e068"
+        "cbbcaf63aa20672cd21a6f64b9513d086f2ade15c90979e870fc2162c07d2f8d"
     )
 
     assert verify_verified_turn_leaf_signature(public_key, signature, leaf_hash)
