@@ -163,6 +163,14 @@ error, so the function returns False for an invalid signature and raises
 (e.g. clock skew) are out of scope. The FCC4 decoder parses acks but does not
 verify them.
 
+**sr25519 edge cases:** `sr25519.verify` raises `ValueError` (not False) for a
+key that is not a Ristretto point and for a signature without the schnorrkel
+marker. All four sr25519 verification paths convert these to False or to the
+path's named error, and the validator-attestation endpoint returns 409; locked
+by `test_sr25519_edge_cases.py`. The three older verifiers use a broad
+`except Exception`, which also turns programming errors into False; narrowing
+it is tracked as technical debt.
+
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
 `verify_turn_proof` is not specified by the spec; the implemented order (field
@@ -474,7 +482,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 319 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 336 passed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

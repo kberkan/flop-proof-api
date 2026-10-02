@@ -125,7 +125,7 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **319 passed** (with the API server running on 127.0.0.1:8000)
+Current regression status: **336 passed** (with the API server running on 127.0.0.1:8000)
 
 ## Test vectors
 
