@@ -719,6 +719,79 @@ def verify_agent_receipt_v1(
         return False
 
 
+def turn_ack_message(
+    channel_id: bytes,
+    turn_index: int,
+    leaf_hash: bytes,
+    agent_send_ms: int,
+    agent_recv_ms: int,
+) -> bytes:
+    """Build the 84-byte per-turn agent ack message (Appendix F.0, F.3).
+
+    channel_id(32) ‖ turn_index:u32LE ‖ leaf_hash(32) ‖ agent_send_ms:u64LE ‖
+    agent_recv_ms:u64LE. NOTE: no domain tag or version byte; the spec keeps
+    the shipped preimage as is (Rationale, yellowpaper L1946-1948).
+
+    leaf_hash must be computed by the caller from the turn under its own
+    explicit leaf version. Upstream publishes an ack vector for V3 only.
+    """
+    for name, value in (
+        ("turn_index", turn_index),
+        ("agent_send_ms", agent_send_ms),
+        ("agent_recv_ms", agent_recv_ms),
+    ):
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be an integer")
+
+    return (
+        _h256(channel_id, "channel_id")
+        + _u32_le(turn_index, "turn_index")
+        + _h256(leaf_hash, "leaf_hash")
+        + _u64_le(agent_send_ms, "agent_send_ms")
+        + _u64_le(agent_recv_ms, "agent_recv_ms")
+    )
+
+
+def verify_turn_ack(
+    agent_public_key: bytes,
+    channel_id: bytes,
+    turn_index: int,
+    leaf_hash: bytes,
+    agent_send_ms: int,
+    agent_recv_ms: int,
+    agent_sig: bytes,
+) -> bool:
+    """Verify a per-turn agent ack (Appendix F.0, F.3): sr25519 under the
+    channel's agent key over turn_ack_message(...).
+
+    Off-chain / SDK verification (F.6: DA fetch/audit/evidence builders,
+    miner record_ack); no extrinsic in Appendix G.1 takes an ack. The spec
+    names no rejection error, so an invalid signature returns False, including
+    a key that is not a valid sr25519 point. Malformed inputs (wrong type,
+    length or integer range) raise ValueError.
+
+    leaf_hash must be computed by the caller from the turn under its own
+    explicit leaf version. Upstream publishes an ack vector for V3 only.
+    """
+    _h256(agent_public_key, "agent_public_key")
+    if not isinstance(agent_sig, bytes) or len(agent_sig) != 64:
+        raise ValueError("agent_sig must be exactly 64 bytes")
+
+    message = turn_ack_message(
+        channel_id=channel_id,
+        turn_index=turn_index,
+        leaf_hash=leaf_hash,
+        agent_send_ms=agent_send_ms,
+        agent_recv_ms=agent_recv_ms,
+    )
+    try:
+        return sr25519.verify(agent_sig, message, agent_public_key)
+    except ValueError:
+        # sr25519 raises for a key that is not a Ristretto point or a
+        # signature without the schnorrkel marker; both are invalid signatures.
+        return False
+
+
 def compute_task_hash_v1(
     genesis_hash: bytes,
     agent: bytes,

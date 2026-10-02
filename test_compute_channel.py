@@ -1109,3 +1109,221 @@ def test_verify_turn_proof_accepts_upstream_verified_turn_v3_vector():
     assert verify_turn_proof(**kwargs) == bytes.fromhex(
         "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
     )
+
+
+# wire-format-v1 `compute_channel_v1.fcc4_transcript_with_ack` and negative case
+# `invalid_agent_ack_signature`, copied verbatim from
+# flop-labs/yellowpaper@3c97bbc8d6 evidence/wire-format-v1.json.
+ACK_PREIMAGE_HEX = (
+    "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+    "ffffffff8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb"
+    "80df2869fbffffffffffffffffffffffffffffff"
+)
+
+ACK_AGENT_SIGNATURE_HEX = (
+    "4241d4420396f9478f3d9a7f302360665c56499d33b40f00866c6124faaa420d"
+    "3ad22f9670c010c7b4008f489cfd017b28dcb931d9ceb3c9eb16ce32a806d88a"
+)
+
+ACK_AGENT_PUBLIC_KEY = bytes.fromhex(
+    "b41236c517514b30a4d6619f4b4354a2ce593cd4b64a7c29dd45e3de6972997a"
+)
+ACK_AGENT_SEND_MS = 18446744073709551611
+ACK_AGENT_RECV_MS = 18446744073709551615
+
+FCC4_TRANSCRIPT_WITH_ACK_HEX = (
+    "464343343655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49"
+    "d66e8d280100000003ffffffff33333333333333333333333333333333333333"
+    "3333333333333333333333333344444444444444444444444444444444444444"
+    "44444444444444444444444444ffffffffffffffffffffffffffffffff016666"
+    "666666666666666666666666666666666666666666666666666666666666368e"
+    "6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777"
+    "777777777777777777777777777777777777777777777777777777777777fdff"
+    "fffffffffffffeffffffffffffff01000000000000002e60e88466a203e1c106"
+    "a6dfca39276cf97556c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a"
+    "6f64b9513d086f2ade15c90979e870fc2162c07d2f8d01fbffffffffffffffff"
+    "ffffffffffffff4241d4420396f9478f3d9a7f302360665c56499d33b40f0086"
+    "6c6124faaa420d3ad22f9670c010c7b4008f489cfd017b28dcb931d9ceb3c9eb"
+    "16ce32a806d88a"
+)
+
+INVALID_AGENT_ACK_SIGNATURE_HEX = (
+    "464343343655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49"
+    "d66e8d280100000003ffffffff33333333333333333333333333333333333333"
+    "3333333333333333333333333344444444444444444444444444444444444444"
+    "44444444444444444444444444ffffffffffffffffffffffffffffffff016666"
+    "666666666666666666666666666666666666666666666666666666666666368e"
+    "6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777"
+    "777777777777777777777777777777777777777777777777777777777777fdff"
+    "fffffffffffffeffffffffffffff01000000000000002e60e88466a203e1c106"
+    "a6dfca39276cf97556c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a"
+    "6f64b9513d086f2ade15c90979e870fc2162c07d2f8d01fbffffffffffffffff"
+    "ffffffffffffff4341d4420396f9478f3d9a7f302360665c56499d33b40f0086"
+    "6c6124faaa420d3ad22f9670c010c7b4008f489cfd017b28dcb931d9ceb3c9eb"
+    "16ce32a806d88a"
+)
+
+
+def _vector_turn_ack_kwargs() -> dict:
+    """Fields of the upstream ack vector, with the canonical V3 leaf hash."""
+    return {
+        "agent_public_key": ACK_AGENT_PUBLIC_KEY,
+        "channel_id": bytes.fromhex(
+            "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+        ),
+        "turn_index": 2**32 - 1,
+        "leaf_hash": bytes.fromhex(
+            "8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb80df2869"
+        ),
+        "agent_send_ms": ACK_AGENT_SEND_MS,
+        "agent_recv_ms": ACK_AGENT_RECV_MS,
+        "agent_sig": bytes.fromhex(ACK_AGENT_SIGNATURE_HEX),
+    }
+
+
+def _verify_fcc4_turn_ack(blob: bytes, agent_public_key: bytes) -> bool:
+    """Decode an FCC4 blob, recompute the turn's own V3 leaf hash, verify its ack."""
+    from app.crypto import compute_verified_turn_leaf_v0_v1_v2_v3, verify_turn_ack
+
+    transcript = decode_fcc4_transcript(blob)
+    (turn,) = transcript.turns
+    assert turn.leaf_version == 3
+    leaf_hash = bytes.fromhex(
+        compute_verified_turn_leaf_v0_v1_v2_v3(
+            leaf_version=turn.leaf_version,
+            channel_id=transcript.channel_id,
+            turn_index=turn.turn_index,
+            h_in=turn.h_in,
+            h_out=turn.h_out,
+            g_n=turn.g_n,
+            decode_policy_hash=turn.decode_policy_hash,
+            h_ids=turn.h_ids,
+            toploc_commitment_hash=turn.toploc_commitment_hash,
+            miner_recv_ms=turn.miner_recv_ms,
+            miner_done_ms=turn.miner_done_ms,
+            latency_ms=turn.latency_ms,
+        )
+    )
+    agent_send_ms, agent_recv_ms, agent_sig = turn.agent_ack
+    return verify_turn_ack(
+        agent_public_key=agent_public_key,
+        channel_id=transcript.channel_id,
+        turn_index=turn.turn_index,
+        leaf_hash=leaf_hash,
+        agent_send_ms=agent_send_ms,
+        agent_recv_ms=agent_recv_ms,
+        agent_sig=agent_sig,
+    )
+
+
+def test_turn_ack_message_matches_upstream_ack_preimage():
+    from app.crypto import turn_ack_message
+
+    kwargs = _vector_turn_ack_kwargs()
+    del kwargs["agent_public_key"], kwargs["agent_sig"]
+
+    message = turn_ack_message(**kwargs)
+
+    assert len(message) == 84
+    assert message == bytes.fromhex(ACK_PREIMAGE_HEX)
+
+
+def test_verify_turn_ack_accepts_upstream_signature_control():
+    from app.crypto import verify_turn_ack
+
+    assert verify_turn_ack(**_vector_turn_ack_kwargs()) is True
+
+
+def test_verify_turn_ack_accepts_upstream_fcc4_transcript_with_ack():
+    assert _verify_fcc4_turn_ack(
+        bytes.fromhex(FCC4_TRANSCRIPT_WITH_ACK_HEX), ACK_AGENT_PUBLIC_KEY
+    ) is True
+
+
+def test_verify_turn_ack_rejects_invalid_agent_ack_signature_vector():
+    """Negative case `invalid_agent_ack_signature`: the decoder accepts the blob
+    (it does not verify acks); verify_turn_ack rejects the flipped signature."""
+    blob = bytes.fromhex(INVALID_AGENT_ACK_SIGNATURE_HEX)
+
+    assert decode_fcc4_transcript(blob).turns[0].agent_ack is not None
+    assert _verify_fcc4_turn_ack(blob, ACK_AGENT_PUBLIC_KEY) is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("channel_id", bytes.fromhex("12" * 32)),
+        ("turn_index", 2**32 - 2),
+        ("leaf_hash", bytes.fromhex("4a3632de6913f0502c6313499b29d0976b085a4612e14e017c5eaf065b1c6c2d")),
+        ("agent_send_ms", 2**64 - 6),
+        ("agent_recv_ms", 2**64 - 2),
+        ("agent_public_key", bytes.fromhex("207b3ee770b7213b7e76bdb32702e2e166a8fea8a125613d6e98c765f5a06d40")),
+    ],
+    ids=["channel_id", "turn_index", "leaf_hash", "send_ms", "recv_ms", "wrong_key"],
+)
+def test_verify_turn_ack_rejects_single_field_change(field, value):
+    from app.crypto import verify_turn_ack
+
+    kwargs = _vector_turn_ack_kwargs()
+    kwargs[field] = value
+
+    assert verify_turn_ack(**kwargs) is False
+
+
+@pytest.mark.parametrize(
+    "agent_public_key",
+    [b"\xff" * 32, b"\x00" * 32],
+    ids=["not-a-ristretto-point", "zero-key"],
+)
+def test_verify_turn_ack_returns_false_for_unusable_public_key(agent_public_key):
+    from app.crypto import verify_turn_ack
+
+    kwargs = _vector_turn_ack_kwargs()
+    kwargs["agent_public_key"] = agent_public_key
+
+    assert verify_turn_ack(**kwargs) is False
+
+
+def test_verify_turn_ack_returns_false_for_unmarked_signature():
+    from app.crypto import verify_turn_ack
+
+    kwargs = _vector_turn_ack_kwargs()
+    sig = kwargs["agent_sig"]
+    kwargs["agent_sig"] = sig[:63] + bytes([sig[63] & 0x7F])
+
+    assert verify_turn_ack(**kwargs) is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("agent_send_ms", 2**64),
+        ("agent_recv_ms", 2**64),
+        ("agent_send_ms", -1),
+        ("turn_index", 2**32),
+        ("turn_index", True),
+        ("leaf_hash", bytes(31)),
+        ("channel_id", "3655"),
+        ("agent_sig", bytes(63)),
+        ("agent_public_key", bytes(33)),
+    ],
+    ids=[
+        "send_ms_u64_overflow",
+        "recv_ms_u64_overflow",
+        "send_ms_negative",
+        "turn_index_u32_overflow",
+        "turn_index_bool",
+        "leaf_hash_31_bytes",
+        "channel_id_str",
+        "sig_63_bytes",
+        "key_33_bytes",
+    ],
+)
+def test_verify_turn_ack_rejects_malformed_input(field, value):
+    from app.crypto import verify_turn_ack
+
+    kwargs = _vector_turn_ack_kwargs()
+    kwargs[field] = value
+
+    with pytest.raises(ValueError):
+        verify_turn_ack(**kwargs)

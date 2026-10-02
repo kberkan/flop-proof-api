@@ -146,8 +146,22 @@ now tested with the vector bytes and is rejected with `BadReceiptSignature`;
 its control tests monkeypatch `verified_work_from_turns`, so they prove only
 the receipt-signature layer. `invalid_validator_signature` is now tested with
 the upstream vector bytes; the only remaining difference is that the spec
-uses the name `BadValidatorSignature`, while our function returns False. Not
-yet covered: `unknown_retention_enum`, `invalid_agent_ack_signature`.
+uses the name `BadValidatorSignature`, while our function returns False.
+`invalid_agent_ack_signature` is now tested with the vector bytes (see the
+per-turn agent ack note below). Not yet covered: `unknown_retention_enum`.
+
+**Per-turn agent ack:** `verify_turn_ack` (`app/crypto.py`) is a CAT-1 pure
+function for off-chain / SDK verification; no extrinsic in Appendix G.1
+consumes an ack. The signed message
+`channel_id ‖ turn_index:u32LE ‖ leaf_hash ‖ agent_send_ms:u64LE ‖ agent_recv_ms:u64LE`
+is defined in spec F.0/F.3 (closed upstream in flop-labs/yellowpaper#36 at
+`3c97bbc8d6`) and carries no domain tag or version byte. Upstream publishes
+an ack vector for V3 only; for other leaf versions the caller computes the
+turn's own leaf hash, untested against upstream. The spec names no rejection
+error, so the function returns False for an invalid signature and raises
+`ValueError` only for malformed input. Semantic checks of the timing values
+(e.g. clock skew) are out of scope. The FCC4 decoder parses acks but does not
+verify them.
 
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
@@ -460,7 +474,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 297 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 319 passed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

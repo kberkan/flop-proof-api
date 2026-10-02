@@ -252,6 +252,61 @@ EMBEDDED_WIRE_VECTORS = {
         ),
         "test_compute_channel.py",
     ),
+    # test_compute_channel.py::ACK_PREIMAGE_HEX
+    "compute_channel_v1.fcc4_transcript_with_ack.ack_preimage_hex": (
+        (
+            "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+            "ffffffff8ca5d489cec0a255a48a2e3c2149d8028597e03ea78628d9a3672ddb"
+            "80df2869fbffffffffffffffffffffffffffffff"
+        ),
+        "test_compute_channel.py",
+    ),
+    # test_compute_channel.py::ACK_AGENT_SIGNATURE_HEX
+    "compute_channel_v1.fcc4_transcript_with_ack.agent_signature_hex": (
+        (
+            "4241d4420396f9478f3d9a7f302360665c56499d33b40f00866c6124faaa420d"
+            "3ad22f9670c010c7b4008f489cfd017b28dcb931d9ceb3c9eb16ce32a806d88a"
+        ),
+        "test_compute_channel.py",
+    ),
+    # test_compute_channel.py::FCC4_TRANSCRIPT_WITH_ACK_HEX
+    "compute_channel_v1.fcc4_transcript_with_ack.blob_hex": (
+        (
+            "464343343655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49"
+            "d66e8d280100000003ffffffff33333333333333333333333333333333333333"
+            "3333333333333333333333333344444444444444444444444444444444444444"
+            "44444444444444444444444444ffffffffffffffffffffffffffffffff016666"
+            "666666666666666666666666666666666666666666666666666666666666368e"
+            "6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777"
+            "777777777777777777777777777777777777777777777777777777777777fdff"
+            "fffffffffffffeffffffffffffff01000000000000002e60e88466a203e1c106"
+            "a6dfca39276cf97556c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a"
+            "6f64b9513d086f2ade15c90979e870fc2162c07d2f8d01fbffffffffffffffff"
+            "ffffffffffffff4241d4420396f9478f3d9a7f302360665c56499d33b40f0086"
+            "6c6124faaa420d3ad22f9670c010c7b4008f489cfd017b28dcb931d9ceb3c9eb"
+            "16ce32a806d88a"
+        ),
+        "test_compute_channel.py",
+    ),
+    # test_compute_channel.py::INVALID_AGENT_ACK_SIGNATURE_HEX
+    "negative_cases.invalid_agent_ack_signature.bytes_hex": (
+        (
+            "464343343655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49"
+            "d66e8d280100000003ffffffff33333333333333333333333333333333333333"
+            "3333333333333333333333333344444444444444444444444444444444444444"
+            "44444444444444444444444444ffffffffffffffffffffffffffffffff016666"
+            "666666666666666666666666666666666666666666666666666666666666368e"
+            "6eca01b76a510619dc2778d46860a9070c4a6ad73ef52e81c31dab5a404f7777"
+            "777777777777777777777777777777777777777777777777777777777777fdff"
+            "fffffffffffffeffffffffffffff01000000000000002e60e88466a203e1c106"
+            "a6dfca39276cf97556c3af971f48c4da8845cc23e068cbbcaf63aa20672cd21a"
+            "6f64b9513d086f2ade15c90979e870fc2162c07d2f8d01fbffffffffffffffff"
+            "ffffffffffffff4341d4420396f9478f3d9a7f302360665c56499d33b40f0086"
+            "6c6124faaa420d3ad22f9670c010c7b4008f489cfd017b28dcb931d9ceb3c9eb"
+            "16ce32a806d88a"
+        ),
+        "test_compute_channel.py",
+    ),
 }
 
 # Values that intentionally differ from the pinned upstream commit.
