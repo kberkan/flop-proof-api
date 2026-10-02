@@ -33,6 +33,16 @@ def test_source_json_fields_and_formats():
         source["license_issue"],
     )
 
+    previous = source["previous_commits"]
+    assert isinstance(previous, list)
+    for entry in previous:
+        assert set(entry) == {"commit", "sha256", "size_bytes"}
+        assert re.fullmatch(r"[0-9a-f]{40}", entry["commit"])
+        assert re.fullmatch(r"[0-9a-f]{64}", entry["sha256"])
+        assert isinstance(entry["size_bytes"], int) and entry["size_bytes"] > 0
+        assert entry["commit"] != source["commit"]
+    assert len({entry["commit"] for entry in previous}) == len(previous)
+
 
 def test_corpus_is_not_vendored():
     assert not (SOURCE_PATH.parent / "wire-format-v1.json").exists()

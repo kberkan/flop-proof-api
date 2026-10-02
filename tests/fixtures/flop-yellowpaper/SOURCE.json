@@ -6,5 +6,12 @@
   "sha256": "cdc2c4143de790a5aa71195dbce19fb520c9c26a4c9f4a399dd23fa9946f6948",
   "size_bytes": 26596,
   "license_note": "Not vendored. Upstream LICENSE applies CC BY 4.0 to the specification text; scope for evidence/ data is unclear; asked upstream in flop-labs/yellowpaper#99.",
-  "license_issue": "https://github.com/flop-labs/yellowpaper/issues/99"
+  "license_issue": "https://github.com/flop-labs/yellowpaper/issues/99",
+  "previous_commits": [
+    {
+      "commit": "3eaf2f25bc46a501df225cae4e4e991975f6b2a9",
+      "sha256": "80d4a7e70f984342eb474ae5285a17a6b9348eca887e1689b15e641922051d93",
+      "size_bytes": 24213
+    }
+  ]
 }

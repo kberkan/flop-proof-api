@@ -182,10 +182,16 @@ same V3 leaf hash. `b412…` remains in use as the agent receipt key, which is
 unchanged upstream. The direct-rail validator values also changed
 between upstream revisions (`3eaf2f25bc`: `b41236c5…`/`90cdb722…` →
 `3c97bbc8d6`: `28cc07a9…`/`729d579c…`); the validator vector tests use
-`3c97bbc8d6`. `scripts/check_wire_vectors.py` checks only the values registered
-in `_embedded_wire_vectors.py`. An upstream value embedded in a test but not
-registered there is not checked; the stale enclave pair in `test_task_hash.py`
-was found by manual search, not by the script.
+`3c97bbc8d6`. `scripts/check_wire_vectors.py` checks the values registered in
+`_embedded_wire_vectors.py` against the pinned corpus, and also scans every hex
+string constant of at least 64 characters in the root `test_*.py` files. CI
+fails when such a value appears in the current corpus but is not registered, or
+appears only in a previous corpus revision listed in `SOURCE.json`
+`previous_commits`. Trivial input patterns (one repeated byte, or `00 01 02 …`)
+are ignored and listed. The scan does not cover values built by expressions
+(e.g. `"33" * 32`), hex values shorter than 64 characters, `bytes` literals, or
+files other than the root test files. The stale enclave pair in
+`test_task_hash.py` was found by manual search, before this scan existed.
 
 **Parity boundary:** `UNVERIFIED` means the API behavior is covered by its internal test suite, but the corresponding FLOP runtime implementation or official external KAT/vector has not been independently verified. `N/A` means the item is not making a runtime-specific parity claim.
 
