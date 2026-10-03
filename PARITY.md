@@ -33,20 +33,28 @@ Internal tests are not external runtime parity evidence.
 
 # Known Security Gaps
 
-> **Status: NOT FIXED.** The gaps below are present in the current API. They
-> are locked by `xfail(strict=True)` tests in `test_security_regression.py`,
-> which will start failing (XPASS) once a fix lands.
+> **Status: NOT FIXED.** The gaps below are present in the current API. Where
+> the table names tests, they are `xfail(strict=True)` tests in
+> `test_security_regression.py`, which will start failing (XPASS) once a fix
+> lands. Rows marked "No test yet" are not locked by any test.
 
 | Gap | Effect | Locked by |
 |---|---|---|
 | No actor authorization on event append (`POST /proofs/{proof_id}/events`) | Any DID with a valid signature of its own can, with the API key, append any event type to any proof, including `result.created`, and close it with `proof.completed` / `proof.failed`. `GET /proofs/{id}/verify` and the offline verifier report such a proof as `valid` and do not report the actor of each event. | `test_foreign_actor_cannot_append_result_to_another_actors_proof`, `test_foreign_actor_cannot_complete_another_actors_proof`, `test_verify_rejects_proof_with_foreign_actor_result` |
 | Event nonce is not part of the signed message | The event signature covers `proof_id\|type\|payload_hash` only. A signed event can be appended again to the same proof with a new nonce, and the proof still verifies. | `test_signed_event_cannot_be_replayed_with_new_nonce` |
 | Validator attestation binds to the latest `result.created` | `POST /proofs/{proof_id}/validator-attestations/accept` uses the highest-sequence `result.created` event. An unauthorized or replayed `result.created` can therefore change which result attestations bind to, or make valid attestations mismatch. | Follows from the two gaps above; no separate test |
+| Dashboard API proxy forwards any request with the server's API key (`dashboard/src/app/api/flop/[...path]/route.ts`) | The proxy forwards every HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD) and every path to the API and adds the server's `FLOP_API_KEY`. The dashboard has no authentication of its own. Anyone who can reach the dashboard can write to the API without an API key, including `POST /proofs/{proof_id}/events`. | No test yet |
+| Events endpoint accepts `request.created` | `POST /proofs/{proof_id}/events` does not restrict the event type, so a second `request.created` can be appended to a proof (accepted with 201 and stored). `/verify` reports such a proof as `invalid`, because the verifier applies the request canonical rule to every `request.created`, but the API still stores the event, and which event identifies the creator is ambiguous. | No test yet |
 
 The previous `test_invalid_event_actor_is_rejected` did not test this: its
 request had no signature block and an unknown field, so it passed on a schema
 error (422). It is now named
 `test_event_with_missing_signature_and_unknown_field_is_rejected`.
+
+**Dashboard labels:** the dashboard derives its "VALID" label and its "Valid
+proofs" counter from the proof `status` (`completed`), not from the
+`/verify` verdict, and several of its green check icons are hard-coded. See
+`docs/design/event-authorization.md` §13.
 
 # 1. Protocol / Runtime Boundary
 
