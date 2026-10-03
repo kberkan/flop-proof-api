@@ -1,6 +1,6 @@
 # Event authorization (design)
 
-Status: design approved, not implemented. Baseline: commit `a325fd4`.
+Status: design approved; authorization function implemented (app/authorization.py); API and verifier integration pending. Baseline for line references: commit `a325fd4`.
 Decision taken: several actors may append events to one proof, but only
 through explicit delegation by the proof's creator.
 
@@ -311,6 +311,27 @@ Approved for implementation. Section numbers refer to this document.
 | D6 | The rule applies to every proof; new proofs are written with `version = "2"`. | §9, option 1 |
 | D7 | No revocation and no sub-delegation in v1. At most 32 delegates per proof. | §12 |
 | D8 | Restricting free-form event types is a separate work item. | §12 |
+
+Implementation decisions for `app/authorization.py`, taken while implementing
+the function:
+
+| # | Decision | Section |
+|---|---|---|
+| D-A1 | `authorize_event` also takes the new event's `payload`, so a malformed delegate list can be rejected with 400. | §5, §3, §6 |
+| D-A2 | The one-`result.created` rule is a separate function, `check_single_result_created`, returning 409. | D5, §8 |
+| D-A3 | Messages: "Invalid delegate list" (400, `invalid_delegates`) and "result.created already exists for this proof" (409, `result_already_created`). | §6 |
+| D-A4 | Delegate cap: at most 32 entries in one list and at most 32 distinct delegates per proof; the creator does not count. | D7, §12 |
+| D-A5 | An empty `delegates` list is valid and has no effect; a repeated entry is 400. | §3 |
+| D-A6 | A malformed delegation already in the chain grants nothing. | §3 |
+| D-A7 | Creator: the first event must be `request.created` and, if it has a `sequence` field, the sequence must be 1. Otherwise there is no creator and every event is unauthorized. | §2, D4 |
+| D-A8 | Check order inside the function: no creator → `request.created` → role → creator-only type → delegate list. | §5 |
+| D-A9 | On rejection, `role` carries the actor's actual role. | §5 |
+| D-A10 | Verifier: replays the chain. For each event *i*, it calls `authorize_event` and `check_single_result_created` with prior = `events[:i]`. The sequence-1 `request.created` is exempt from this loop. If any event would be rejected by the API, the verdict is `invalid`. API and verifier then apply the same rule, and events written around the API are caught too. | §5, §7 |
+
+Note on D-A10: §5 requires `prior_events` to contain only events whose
+signatures verified. A chain with any invalid signature is already `invalid`,
+so this affects only which `role` is reported for later events. The verifier
+integration should pass only signature-valid events as `prior`.
 
 Not decided by this list:
 

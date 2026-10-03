@@ -38,4 +38,5 @@ testpaths = [
     "test_testpaths_guard.py",
     "test_wire_vectors_source.py",
     "test_sr25519_edge_cases.py",
+    "test_authorization.py",
 ]
