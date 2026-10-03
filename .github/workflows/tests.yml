@@ -78,3 +78,32 @@ jobs:
         run: |
           echo "===== /tmp/flop-uvicorn.log ====="
           cat /tmp/flop-uvicorn.log || true
+
+  dashboard:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: dashboard
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Tests import .ts modules directly; Node strips the types without a
+          # flag from 22.18.0 / 23.6.0. Matches the local development version.
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run dashboard tests
+        run: npm test
+
+      - name: Type-check
+        run: npx tsc --noEmit
