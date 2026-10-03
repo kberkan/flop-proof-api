@@ -18,6 +18,7 @@ Evidence accepted or validated by the FLOP Proof API does not, by itself, provid
 - STARK proof execution or verification merely because STARK evidence was accepted
 - Runtime settlement or execution verification merely because validator attestations were accepted
 - Execution verification, settlement, or credit merely because `accepted=true`
+- Authorization of the actor appending an event: a valid signature shows which DID signed it, not that this DID may append to that proof (known gap; see `PARITY.md`, Known Security Gaps)
 
 **Test/parity boundary:** `IMPLEMENTED (internal-test-verified)` describes behavior validated by the API's own test suite; it does not mean independently verified byte-level parity with the FLOP runtime. External parity status is classified separately in `PARITY.md`.
 
@@ -125,7 +126,7 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **336 passed** (with the API server running on 127.0.0.1:8000)
+Current regression status: **336 passed, 4 xfailed** (with the API server running on 127.0.0.1:8000)
 
 ## Test vectors
 

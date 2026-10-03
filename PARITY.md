@@ -31,6 +31,23 @@ Internal tests are not external runtime parity evidence.
 - NOT IMPLEMENTED
 **Internal tests are NOT external empirical evidence.**
 
+# Known Security Gaps
+
+> **Status: NOT FIXED.** The gaps below are present in the current API. They
+> are locked by `xfail(strict=True)` tests in `test_security_regression.py`,
+> which will start failing (XPASS) once a fix lands.
+
+| Gap | Effect | Locked by |
+|---|---|---|
+| No actor authorization on event append (`POST /proofs/{proof_id}/events`) | Any DID with a valid signature of its own can, with the API key, append any event type to any proof, including `result.created`, and close it with `proof.completed` / `proof.failed`. `GET /proofs/{id}/verify` and the offline verifier report such a proof as `valid` and do not report the actor of each event. | `test_foreign_actor_cannot_append_result_to_another_actors_proof`, `test_foreign_actor_cannot_complete_another_actors_proof`, `test_verify_rejects_proof_with_foreign_actor_result` |
+| Event nonce is not part of the signed message | The event signature covers `proof_id\|type\|payload_hash` only. A signed event can be appended again to the same proof with a new nonce, and the proof still verifies. | `test_signed_event_cannot_be_replayed_with_new_nonce` |
+| Validator attestation binds to the latest `result.created` | `POST /proofs/{proof_id}/validator-attestations/accept` uses the highest-sequence `result.created` event. An unauthorized or replayed `result.created` can therefore change which result attestations bind to, or make valid attestations mismatch. | Follows from the two gaps above; no separate test |
+
+The previous `test_invalid_event_actor_is_rejected` did not test this: its
+request had no signature block and an unknown field, so it passed on a schema
+error (422). It is now named
+`test_event_with_missing_signature_and_unknown_field_is_rejected`.
+
 # 1. Protocol / Runtime Boundary
 
 | Capability | Status | Risk | Exact nuance |
@@ -482,7 +499,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 336 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 336 passed, 4 xfailed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
