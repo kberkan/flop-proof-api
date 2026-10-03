@@ -278,12 +278,14 @@ def test_verify_endpoint_returns_verification_result():
 
 
 # ---------------------------------------------------------------------------
-# Known security gaps (see PARITY.md "Known security gaps"). These tests state
-# the intended behavior and are expected to fail until the gaps are fixed.
-# raises=AssertionError keeps any other error (setup, import) visible.
+# Event authorization (docs/design/event-authorization.md) and the remaining
+# known gap (see PARITY.md "Known Security Gaps"). The replay test is still
+# expected to fail; raises=AssertionError keeps any other error visible.
 # ---------------------------------------------------------------------------
 
-AUTHZ_GAP = "known gap: event append has no actor authorization (see PARITY.md)"
+NOT_AUTHORIZED = {"detail": "Actor is not authorized for this proof"}
+CREATOR_ONLY = {"detail": "Event type requires the proof creator"}
+
 REPLAY_GAP = "known gap: event nonce is not part of the signed message (see PARITY.md)"
 
 
@@ -307,7 +309,6 @@ def signed_event(private_key, did, proof_id, event_type, payload):
     }
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=AUTHZ_GAP)
 def test_foreign_actor_cannot_append_result_to_another_actors_proof():
     proof, _, _ = create_proof()
     foreign_key, foreign_did = new_actor()
@@ -323,10 +324,10 @@ def test_foreign_actor_cannot_append_result_to_another_actors_proof():
         ),
     )
 
-    assert 400 <= response.status_code < 500, response.json()
+    assert response.status_code == 403
+    assert response.json() == NOT_AUTHORIZED
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=AUTHZ_GAP)
 def test_foreign_actor_cannot_complete_another_actors_proof():
     proof, _, _ = create_proof()
     foreign_key, foreign_did = new_actor()
@@ -343,7 +344,8 @@ def test_foreign_actor_cannot_complete_another_actors_proof():
     )
     status = client.get(f"/proofs/{proof['proof_id']}").json()["status"]
 
-    assert 400 <= response.status_code < 500, response.json()
+    assert response.status_code == 403
+    assert response.json() == NOT_AUTHORIZED
     assert status == "pending"
 
 
@@ -366,11 +368,9 @@ def test_signed_event_cannot_be_replayed_with_new_nonce():
     assert 400 <= second.status_code < 500, second.json()
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=AUTHZ_GAP)
 def test_verify_rejects_proof_with_foreign_actor_result(in_memory_db):
-    """The foreign event is written directly to the database, so this test
-    checks the verifier on its own and keeps failing for the right reason
-    even after the append endpoint starts rejecting foreign actors."""
+    """The foreign event is written directly to the database, bypassing the
+    append endpoint, so this test checks the verifier on its own (D-A10)."""
     from app.events import create_event
 
     proof, _, _ = create_proof()
@@ -400,5 +400,244 @@ def test_verify_rejects_proof_with_foreign_actor_result(in_memory_db):
         db.close()
 
     verification = client.get(f"/proofs/{proof['proof_id']}/verify").json()
+    foreign = verification["checks"][-1]
 
     assert verification["verdict"] == "invalid"
+    assert foreign["actor_did"] == foreign_did
+    assert foreign["role"] == "unauthorized"
+    assert foreign["actor_authorized"] is False
+    assert foreign["authorization_reason"] == "not_delegated"
+    # The event itself is correctly signed; only authorization fails.
+    assert foreign["signature_valid"] is True
+
+
+# ---------------------------------------------------------------------------
+# Delegation end to end (docs/design/event-authorization.md, D1-D8, D-A1-D-A10)
+# ---------------------------------------------------------------------------
+
+
+def append(private_key, did, proof_id, event_type, payload):
+    return client.post(
+        f"/proofs/{proof_id}/events",
+        json=signed_event(private_key, did, proof_id, event_type, payload),
+    )
+
+
+def delegate_to(private_key, did, proof_id, *delegates):
+    response = append(
+        private_key, did, proof_id, "task.delegated", {"delegates": list(delegates)}
+    )
+    assert response.status_code == 201, response.json()
+    return response
+
+
+def test_delegation_end_to_end_with_verifier_roles():
+    proof, creator_key, creator_did = create_proof()
+    proof_id = proof["proof_id"]
+    delegate_key, delegate_did = new_actor()
+
+    delegate_to(creator_key, creator_did, proof_id, delegate_did)
+
+    result = append(delegate_key, delegate_did, proof_id, "result.created", {"content": "by delegate"})
+    assert result.status_code == 201
+
+    delegate_close = append(delegate_key, delegate_did, proof_id, "proof.completed", {"result": "x"})
+    assert delegate_close.status_code == 403
+    assert delegate_close.json() == CREATOR_ONLY
+
+    creator_close = append(creator_key, creator_did, proof_id, "proof.completed", {"result": "done"})
+    assert creator_close.status_code == 201
+
+    verification = client.get(f"/proofs/{proof_id}/verify").json()
+
+    assert verification["verdict"] == "valid"
+    assert [(check["type"], check["role"], check["actor_authorized"]) for check in verification["checks"]] == [
+        ("request.created", "creator", True),
+        ("task.delegated", "creator", True),
+        ("result.created", "delegate", True),
+        ("proof.completed", "creator", True),
+    ]
+    assert all(check["authorization_reason"] is None for check in verification["checks"])
+
+
+@pytest.mark.parametrize("who", ["creator", "delegate", "stranger"])
+def test_request_created_cannot_be_appended_through_events_endpoint(who):
+    proof, creator_key, creator_did = create_proof()
+    proof_id = proof["proof_id"]
+    delegate_key, delegate_did = new_actor()
+    delegate_to(creator_key, creator_did, proof_id, delegate_did)
+    actors = {
+        "creator": (creator_key, creator_did),
+        "delegate": (delegate_key, delegate_did),
+        "stranger": new_actor(),
+    }
+
+    response = append(*actors[who], proof_id, "request.created", {"text": "second request"})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "request.created can only be written by POST /proofs"}
+
+
+@pytest.mark.parametrize("second_by", ["creator", "delegate"])
+def test_second_result_created_is_rejected_with_409(second_by):
+    proof, creator_key, creator_did = create_proof()
+    proof_id = proof["proof_id"]
+    delegate_key, delegate_did = new_actor()
+    delegate_to(creator_key, creator_did, proof_id, delegate_did)
+    assert append(creator_key, creator_did, proof_id, "result.created", {"content": "first"}).status_code == 201
+
+    key, did = (creator_key, creator_did) if second_by == "creator" else (delegate_key, delegate_did)
+    response = append(key, did, proof_id, "result.created", {"content": "second"})
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "result.created already exists for this proof"}
+
+
+@pytest.mark.parametrize(
+    ("delegates", "detail"),
+    [
+        ("33", "Invalid delegate list"),
+        ("bad-did", "Invalid delegate DID"),
+    ],
+)
+def test_malformed_delegates_are_rejected_with_400(delegates, detail):
+    proof, creator_key, creator_did = create_proof()
+    if delegates == "33":
+        value = [new_actor()[1] for _ in range(33)]
+    else:
+        value = ["did:key:not-a-key"]
+
+    response = append(creator_key, creator_did, proof["proof_id"], "task.delegated", {"delegates": value})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": detail}
+
+
+def test_delegate_cannot_append_before_the_delegation():
+    proof, creator_key, creator_did = create_proof()
+    proof_id = proof["proof_id"]
+    delegate_key, delegate_did = new_actor()
+
+    early = append(delegate_key, delegate_did, proof_id, "agent.started", {})
+    delegate_to(creator_key, creator_did, proof_id, delegate_did)
+    late = append(delegate_key, delegate_did, proof_id, "agent.started", {})
+
+    assert early.status_code == 403
+    assert early.json() == NOT_AUTHORIZED
+    assert late.status_code == 201
+
+
+def test_offline_verifier_matches_api_verification(in_memory_db):
+    """D-A10: the exported proof gives the same verdict and authorization
+    fields offline as through GET /verify, including for an event written
+    around the API."""
+    from app.events import create_event
+    from app.verifier import verify_proof_data
+
+    proof, creator_key, creator_did = create_proof()
+    proof_id = proof["proof_id"]
+    delegate_key, delegate_did = new_actor()
+    stranger_key, stranger_did = new_actor()
+    delegate_to(creator_key, creator_did, proof_id, delegate_did)
+    assert append(delegate_key, delegate_did, proof_id, "result.created", {"content": "ok"}).status_code == 201
+
+    stranger_event = signed_event(stranger_key, stranger_did, proof_id, "agent.started", {})
+    db = in_memory_db()
+    try:
+        create_event(
+            db=db,
+            proof_id=proof_id,
+            event_type=stranger_event["type"],
+            actor_did=stranger_did,
+            payload=stranger_event["payload"],
+            canonical=stranger_event["signature"]["canonical"],
+            signature=stranger_event["signature"]["sig"],
+            nonce=stranger_event["signature"]["nonce"],
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    api = client.get(f"/proofs/{proof_id}/verify").json()
+    offline = verify_proof_data(client.get(f"/proofs/{proof_id}").json())
+
+    fields = ("sequence", "type", "actor_did", "role", "actor_authorized", "authorization_reason")
+    assert offline["verdict"] == api["verdict"] == "invalid"
+    assert [{k: c[k] for k in fields} for c in offline["checks"]] == [
+        {k: c[k] for k in fields} for c in api["checks"]
+    ]
+    assert [c["role"] for c in api["checks"]] == ["creator", "creator", "delegate", "unauthorized"]
+
+
+@pytest.fixture
+def file_db(in_memory_db, tmp_path):
+    """A temporary file database for the concurrency test: the in-memory
+    StaticPool shares one connection between threads, so it cannot show
+    whether the write lock serializes concurrent requests."""
+    from app import models  # noqa: F401
+    from app.database import Base, get_db
+
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'race.db'}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    Base.metadata.create_all(engine)
+    FileSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    def override_get_db():
+        db = FileSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    from app.main import app as fastapi_app
+
+    previous = fastapi_app.dependency_overrides[get_db]
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    try:
+        yield FileSession
+    finally:
+        fastapi_app.dependency_overrides[get_db] = previous
+        engine.dispose()
+
+
+def test_concurrent_result_created_admits_exactly_one(file_db):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.models import ProofEvent
+
+    for _ in range(5):
+        proof, creator_key, creator_did = create_proof()
+        proof_id = proof["proof_id"]
+        bodies = [
+            signed_event(creator_key, creator_did, proof_id, "result.created", {"content": f"result {index}"})
+            for index in range(2)
+        ]
+        barrier = threading.Barrier(2)
+
+        def post(body):
+            barrier.wait()
+            return client.post(f"/proofs/{proof_id}/events", json=body).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = sorted(executor.map(post, bodies))
+
+        db = file_db()
+        try:
+            results = (
+                db.query(ProofEvent)
+                .filter(ProofEvent.proof_id == proof_id, ProofEvent.event_type == "result.created")
+                .count()
+            )
+            sequences = [
+                row.sequence
+                for row in db.query(ProofEvent).filter(ProofEvent.proof_id == proof_id).order_by(ProofEvent.sequence)
+            ]
+        finally:
+            db.close()
+
+        assert statuses == [201, 409]
+        assert results == 1
+        assert sequences == [1, 2]

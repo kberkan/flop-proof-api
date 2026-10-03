@@ -1,6 +1,6 @@
 # Event authorization (design)
 
-Status: design approved; authorization function implemented (app/authorization.py); API and verifier integration pending. Baseline for line references: commit `a325fd4`.
+Status: implemented (app/authorization.py, API in app/main.py, verifier in app/verification_core.py). Baseline for line references: commit `a325fd4`.
 Decision taken: several actors may append events to one proof, but only
 through explicit delegation by the proof's creator.
 

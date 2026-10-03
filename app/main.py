@@ -29,7 +29,8 @@ from .crypto import (
 )
 from .replay import claim_processed_task
 from .database import Base, engine, get_db
-from .events import create_event
+from .authorization import REASONS, authorize_event, check_single_result_created
+from .events import begin_chain_write, create_event
 from .schemas import (
     ProofValidatorAttestationAcceptRequest,
     ValidatorAttestationAcceptRequest,
@@ -597,7 +598,7 @@ def create_proof(
     proof = Proof(
         proof_id=proof_id,
         request_id=signed_request.request_id,
-        version="1",
+        version="2",
         status="pending",
         created_at=now,
         updated_at=now,
@@ -724,18 +725,57 @@ def append_event(
             detail="Invalid event signature",
         )
 
-    existing_nonce = db.scalar(
-        select(ProofEvent).where(
-            ProofEvent.proof_id == proof_id,
-            ProofEvent.nonce == event.signature.nonce,
+    # Everything below runs inside the serialized chain write section
+    # (BEGIN IMMEDIATE on SQLite), so the authorization, nonce and
+    # single-result checks see the same chain the new event is appended to.
+    begin_chain_write(db)
+    db.refresh(proof)
+
+    if proof.status in {"completed", "failed"}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Proof is already {proof.status}",
         )
+
+    chain = db.scalars(
+        select(ProofEvent)
+        .where(ProofEvent.proof_id == proof_id)
+        .order_by(ProofEvent.sequence)
+    ).all()
+    prior_events = [
+        {
+            "type": stored.event_type,
+            "actor_did": stored.actor_did,
+            "payload": json.loads(stored.payload_json),
+            "sequence": stored.sequence,
+        }
+        for stored in chain
+    ]
+
+    decision = authorize_event(
+        prior_events,
+        event.actor_did,
+        event.type,
+        event.payload,
     )
 
-    if existing_nonce is not None:
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=decision.http_status,
+            detail=decision.message,
+        )
+
+    if any(stored.nonce == event.signature.nonce for stored in chain):
         raise HTTPException(
             status_code=409,
             detail="event nonce already used for this proof",
         )
+
+    single_result_error = check_single_result_created(prior_events, event.type)
+
+    if single_result_error is not None:
+        status_code, detail = REASONS[single_result_error]
+        raise HTTPException(status_code=status_code, detail=detail)
 
     created = create_event(
         db=db,

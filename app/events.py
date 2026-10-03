@@ -9,6 +9,21 @@ from .crypto import hash_event_record, sha256_json
 from .models import ProofEvent
 
 
+def begin_chain_write(db: Session) -> None:
+    """Enter the serialized write section for proof chains.
+
+    On SQLite this is BEGIN IMMEDIATE, which takes the database write lock
+    until commit or rollback. It is idempotent, so callers can take the lock
+    before reading the chain (authorization, nonce and single-result checks)
+    and create_event can still call it.
+    """
+    if db.bind is None or db.bind.dialect.name != "sqlite":
+        return
+    if db.connection().connection.dbapi_connection.in_transaction:
+        return
+    db.execute(text("BEGIN IMMEDIATE"))
+
+
 def create_event(
     db: Session,
     proof_id: str,
@@ -27,8 +42,7 @@ def create_event(
     # SQLite must serialize concurrent sequence allocation. Without an
     # immediate write transaction, concurrent writers can both observe the
     # same last sequence and create duplicate sequence numbers.
-    if db.bind is not None and db.bind.dialect.name == "sqlite":
-        db.execute(text("BEGIN IMMEDIATE"))
+    begin_chain_write(db)
 
     last_event = db.scalar(
         select(ProofEvent)

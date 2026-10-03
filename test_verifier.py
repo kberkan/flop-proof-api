@@ -122,8 +122,16 @@ def test_invalid_events_structure():
     assert result["error"] == "Invalid events"
 
 def _build_signed_result_event(payload):
+    """A valid two-event chain: the creator's request.created (sequence 1)
+    and its result.created (sequence 2) carrying `payload`.
+
+    Event authorization (docs/design/event-authorization.md, D-A7/D-A10)
+    makes a chain without a sequence-1 request.created invalid, so the
+    result alone is no longer a complete proof.
+    """
     from app.crypto import (
         generate_test_keypair,
+        hash_event_record,
         public_key_to_test_did,
         sha256_json,
         sign_message,
@@ -131,13 +139,37 @@ def _build_signed_result_event(payload):
 
     private_key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
-
     proof_id = "proof_task_hash_test"
+
+    request_canonical = "task-hash-room|request-nonce|task hash test"
+    request_signature = sign_message(private_key, request_canonical.encode("utf-8"))
+    request_payload = {
+        "request_id": "request-task-hash-test",
+        "from_did": did,
+        "text": "task hash test",
+        "signature": {
+            "nonce": "request-nonce",
+            "sig": request_signature,
+            "canonical": request_canonical,
+        },
+    }
+    request_event = {
+        "event_id": "evt_task_hash_request",
+        "type": "request.created",
+        "actor_did": did,
+        "payload": request_payload,
+        "payload_hash": sha256_json(request_payload),
+        "canonical": request_canonical,
+        "signature": request_signature,
+        "created_at": "2026-09-08T00:00:00+00:00",
+        "sequence": 1,
+        "previous_event_hash": None,
+    }
+
     event_type = "result.created"
     payload_hash = sha256_json(payload)
     canonical = f"{proof_id}|{event_type}|{payload_hash}"
-
-    return {
+    result_event = {
         "event_id": "evt_task_hash_test",
         "type": event_type,
         "actor_did": did,
@@ -148,10 +180,22 @@ def _build_signed_result_event(payload):
             private_key,
             canonical.encode("utf-8"),
         ),
-        "created_at": "2026-09-08T00:00:00+00:00",
-        "sequence": 1,
-        "previous_event_hash": None,
+        "created_at": "2026-09-08T00:00:01+00:00",
+        "sequence": 2,
+        "previous_event_hash": hash_event_record(
+            event_id=request_event["event_id"],
+            proof_id=proof_id,
+            event_type=request_event["type"],
+            actor_did=request_event["actor_did"],
+            payload_hash=request_event["payload_hash"],
+            canonical=request_event["canonical"],
+            signature=request_event["signature"],
+            created_at=request_event["created_at"],
+            sequence=request_event["sequence"],
+        ),
     }
+
+    return [request_event, result_event]
 
 
 def _task_hash_test_inputs():
@@ -187,11 +231,11 @@ def test_legacy_result_has_no_task_hash_requirement():
         "content": "model output",
     }
 
-    event = _build_signed_result_event(payload)
+    events = _build_signed_result_event(payload)
 
     result = verify_proof_events(
         proof_id="proof_task_hash_test",
-        events=[event],
+        events=events,
     )
 
     assert result["verdict"] == "valid"
@@ -209,11 +253,11 @@ def test_result_with_consistent_task_hash_is_valid():
         "task_hash_inputs": inputs,
     }
 
-    event = _build_signed_result_event(payload)
+    events = _build_signed_result_event(payload)
 
     result = verify_proof_events(
         proof_id="proof_task_hash_test",
-        events=[event],
+        events=events,
     )
 
     assert result["verdict"] == "valid"
@@ -231,11 +275,11 @@ def test_result_with_invalid_task_hash_is_invalid():
         "task_hash_inputs": inputs,
     }
 
-    event = _build_signed_result_event(payload)
+    events = _build_signed_result_event(payload)
 
     result = verify_proof_events(
         proof_id="proof_task_hash_test",
-        events=[event],
+        events=events,
     )
 
     assert result["verdict"] == "invalid"

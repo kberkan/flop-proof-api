@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from .authorization import authorize_event, check_single_result_created
 from .crypto import (
     compute_task_hash,
     hash_event_record,
@@ -28,6 +29,10 @@ def verify_proof_events(
     checks = []
     expected_sequence = 1
     previous_event = None
+    # Events whose signature, canonical message and payload hash all verify.
+    # Only these may grant authority to later events (authorize_event
+    # precondition; docs/design/event-authorization.md D-A10).
+    authorization_prior: list[dict[str, Any]] = []
 
     for event in events:
         event_id = event.get("event_id")
@@ -102,6 +107,26 @@ def verify_proof_events(
         except Exception:
             signature_ok = False
 
+        # D-A10: replay the API's authorization rule over the chain. The
+        # sequence-1 request.created is the creator's own event.
+        if previous_event is None and event_type == "request.created":
+            role, authorization_reason = "creator", None
+        elif not isinstance(actor_did, str):
+            role, authorization_reason = "unauthorized", "not_delegated"
+        else:
+            decision = authorize_event(
+                authorization_prior,
+                actor_did,
+                event_type,
+                payload,
+            )
+            role, authorization_reason = decision.role, decision.reason
+            if decision.allowed:
+                authorization_reason = check_single_result_created(
+                    authorization_prior,
+                    event_type,
+                )
+
         checks.append(
             {
                 "sequence": sequence,
@@ -112,8 +137,22 @@ def verify_proof_events(
                 "payload_hash_valid": payload_hash_ok,
                 "canonical_valid": canonical_ok,
                 "signature_valid": signature_ok,
+                "actor_did": actor_did,
+                "role": role,
+                "actor_authorized": authorization_reason is None,
+                "authorization_reason": authorization_reason,
             }
         )
+
+        if signature_ok and canonical_ok and payload_hash_ok:
+            authorization_prior.append(
+                {
+                    "type": event_type,
+                    "actor_did": actor_did,
+                    "payload": payload,
+                    "sequence": sequence,
+                }
+            )
 
         expected_sequence += 1
         previous_event = event
@@ -124,6 +163,7 @@ def verify_proof_events(
         and check["payload_hash_valid"]
         and check["canonical_valid"]
         and check["signature_valid"]
+        and check["actor_authorized"]
         for check in checks
     )
 

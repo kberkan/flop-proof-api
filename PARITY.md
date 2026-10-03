@@ -33,18 +33,18 @@ Internal tests are not external runtime parity evidence.
 
 # Known Security Gaps
 
-> **Status: NOT FIXED.** The gaps below are present in the current API. Where
-> the table names tests, they are `xfail(strict=True)` tests in
-> `test_security_regression.py`, which will start failing (XPASS) once a fix
-> lands. Rows marked "No test yet" are not locked by any test.
+> **Status per row.** Rows marked **Fixed** or **Mitigated** are kept for the
+> record. For **Open** rows, a test marked "strict xfail" in
+> `test_security_regression.py` starts failing (XPASS) once a fix lands. Rows
+> marked "No test yet" are not locked by any test.
 
 | Gap | Effect | Locked by |
 |---|---|---|
-| No actor authorization on event append (`POST /proofs/{proof_id}/events`) | Any DID with a valid signature of its own can, with the API key, append any event type to any proof, including `result.created`, and close it with `proof.completed` / `proof.failed`. `GET /proofs/{id}/verify` and the offline verifier report such a proof as `valid` and do not report the actor of each event. | `test_foreign_actor_cannot_append_result_to_another_actors_proof`, `test_foreign_actor_cannot_complete_another_actors_proof`, `test_verify_rejects_proof_with_foreign_actor_result` |
-| Event nonce is not part of the signed message | The event signature covers `proof_id\|type\|payload_hash` only. A signed event can be appended again to the same proof with a new nonce, and the proof still verifies. | `test_signed_event_cannot_be_replayed_with_new_nonce` |
-| Validator attestation binds to the latest `result.created` | `POST /proofs/{proof_id}/validator-attestations/accept` uses the highest-sequence `result.created` event. An unauthorized or replayed `result.created` can therefore change which result attestations bind to, or make valid attestations mismatch. | Follows from the two gaps above; no separate test |
+| No actor authorization on event append (`POST /proofs/{proof_id}/events`) | **Fixed** by the event authorization change (docs/design/event-authorization.md). Was: any DID with a valid signature of its own could, with the API key, append any event type to any proof and close it, and `/verify` reported such a proof as `valid`. Now only the creator and DIDs the creator listed in a `task.delegated` `delegates` list may append; `task.delegated`, `proof.completed` and `proof.failed` are creator-only (403). `/verify` and the offline verifier replay the same rule, report `actor_did`, `role`, `actor_authorized` and `authorization_reason` per event, and return `invalid` for any unauthorized event, including one written around the API. See `docs/design/event-authorization.md`. | `test_foreign_actor_cannot_append_result_to_another_actors_proof`, `test_foreign_actor_cannot_complete_another_actors_proof`, `test_verify_rejects_proof_with_foreign_actor_result`, `test_delegation_end_to_end_with_verifier_roles`, `test_delegate_cannot_append_before_the_delegation`, `test_offline_verifier_matches_api_verification`, `test_authorization.py` |
+| Event nonce is not part of the signed message | **Open.** The event signature covers `proof_id\|type\|payload_hash` only. A signed event can be appended again to the same proof with a new nonce, by anyone holding the API key; it keeps its original, authorized `actor_did`, so authorization does not stop it. A replayed `result.created` is now rejected by the one-`result.created` rule (409); other types, including a creator-signed `task.delegated`, are still accepted and the proof still verifies. | `test_signed_event_cannot_be_replayed_with_new_nonce` (strict xfail) |
+| Validator attestation binds to the latest `result.created` | **Mitigated** by the event authorization change (docs/design/event-authorization.md). `POST /proofs/{proof_id}/validator-attestations/accept` still uses the highest-sequence `result.created`, but a proof can now hold only one `result.created` (a second one gets 409, also under concurrent requests), and only the creator or a delegate can write it. The binding target can no longer be replaced. | `test_second_result_created_is_rejected_with_409`, `test_concurrent_result_created_admits_exactly_one` |
 | Dashboard has no authentication (`dashboard/src/app/api/flop/[...path]/route.ts`) | **Partly fixed.** The proxy now forwards only `GET` on `proofs`, `proofs/{proof_id}`, `proofs/{proof_id}/verify` and `actors`, with `proof_id` matching `proof_` + 32 hex, and only the `limit` and `status` query parameters on `proofs`; every other method returns 405 and every other path 404 without reaching the API (`dashboard/src/lib/proxy-policy.ts`). It forwards only `Accept` and the API key, not browser headers or cookies. **Remaining:** the dashboard has no authentication of its own, so anyone who can reach it can **read** proof data with the server's API key. The dashboard is run locally only, and `npm run dev` / `npm start` bind to `127.0.0.1`. | `dashboard/src/lib/proxy-policy.test.mjs` (`npm test` in `dashboard/`; runs in CI in the `dashboard` job of `.github/workflows/tests.yml`, with `npx tsc --noEmit`) |
-| Events endpoint accepts `request.created` | `POST /proofs/{proof_id}/events` does not restrict the event type, so a second `request.created` can be appended to a proof (accepted with 201 and stored). `/verify` reports such a proof as `invalid`, because the verifier applies the request canonical rule to every `request.created`, but the API still stores the event, and which event identifies the creator is ambiguous. | No test yet |
+| Events endpoint accepts `request.created` | **Fixed** by the event authorization change (docs/design/event-authorization.md). Was: a second `request.created` could be appended through `POST /proofs/{proof_id}/events` (201). Now it is rejected with 403 for every actor, and the creator is the actor of the sequence-1 `request.created`. | `test_request_created_cannot_be_appended_through_events_endpoint` |
 
 The previous `test_invalid_event_actor_is_rejected` did not test this: its
 request had no signature block and an unknown field, so it passed on a schema
@@ -507,7 +507,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 383 passed, 4 xfailed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 397 passed, 1 xfailed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
