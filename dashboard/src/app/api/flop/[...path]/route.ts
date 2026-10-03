@@ -1,31 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = "http://127.0.0.1:8000";
+import { evaluateProxyRequest } from "@/lib/proxy-policy";
 
-async function proxy(request: NextRequest) {
-  const path = request.nextUrl.pathname.replace(/^\/api\/flop/, "");
-  const url = `${API_URL}${path}${request.nextUrl.search}`;
+const API_URL = "http://127.0.0.1:8000";
+const PREFIX = "/api/flop";
+
+function rejected(status: 404 | 405) {
+  return NextResponse.json(
+    { detail: status === 405 ? "Method not allowed" : "Not found" },
+    { status, headers: status === 405 ? { Allow: "GET" } : undefined },
+  );
+}
+
+export async function GET(request: NextRequest) {
+  // Raw, still percent-encoded path, so encoded "." or "/" cannot slip through.
+  const rest = request.nextUrl.pathname.slice(PREFIX.length);
+  const segments = rest.startsWith("/") ? rest.slice(1).split("/") : [rest];
+
+  const decision = evaluateProxyRequest(
+    request.method,
+    segments,
+    request.nextUrl.searchParams,
+  );
+
+  if (!decision.allowed) {
+    return rejected(decision.status);
+  }
 
   const apiKey = process.env.FLOP_API_KEY;
 
   if (!apiKey) {
     return NextResponse.json(
       { detail: "Dashboard API authentication is not configured" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 
-  const headers = new Headers(request.headers);
-  headers.set("X-API-Key", apiKey);
-  headers.delete("host");
-
-  const response = await fetch(url, {
-    method: request.method,
-    headers,
-    body:
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : await request.arrayBuffer(),
+  // Forward only what the API needs; browser headers and cookies stay here.
+  const response = await fetch(`${API_URL}${decision.path}${decision.search}`, {
+    method: "GET",
+    headers: {
+      Accept: request.headers.get("accept") ?? "application/json",
+      "X-API-Key": apiKey,
+    },
     cache: "no-store",
   });
 
@@ -40,11 +57,15 @@ async function proxy(request: NextRequest) {
   });
 }
 
+// Every other method is answered here and never reaches the API.
+function methodNotAllowed() {
+  return rejected(405);
+}
+
 export {
-  proxy as GET,
-  proxy as POST,
-  proxy as PUT,
-  proxy as PATCH,
-  proxy as DELETE,
-  proxy as HEAD,
+  methodNotAllowed as POST,
+  methodNotAllowed as PUT,
+  methodNotAllowed as PATCH,
+  methodNotAllowed as DELETE,
+  methodNotAllowed as HEAD,
 };
