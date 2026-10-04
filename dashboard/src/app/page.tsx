@@ -6,11 +6,11 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
-  CheckCircle2,
   ChevronRight,
   CircleDot,
   FileCheck2,
   Fingerprint,
+  Flag,
   LayoutDashboard,
   Network,
   Search,
@@ -19,11 +19,14 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { statusLabel } from "@/lib/proof-view";
+
+// Lifecycle status only; whether a proof verifies is shown on /verification.
 function Status({ value }: { value: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-emerald-300">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-      {value}
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-300">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+      {statusLabel(value)}
     </span>
   );
 }
@@ -203,7 +206,7 @@ export default function Home() {
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {[
                 ["Total proofs", stats.total.toString(), "Live", FileCheck2],
-                ["Valid proofs", stats.completed.toString(), `${stats.total ? ((stats.completed / stats.total) * 100).toFixed(1) : "0.0"}%`, CheckCircle2],
+                ["Completed proofs", stats.completed.toString(), `${stats.total ? ((stats.completed / stats.total) * 100).toFixed(1) : "0.0"}%`, Flag],
                 ["Active", stats.active.toString(), "Live", CircleDot],
                 ["Failed", stats.failed.toString(), `${stats.total ? ((stats.failed / stats.total) * 100).toFixed(1) : "0.0"}%`, XCircle],
               ].map(([label, value, change, Icon]) => {
@@ -251,7 +254,7 @@ export default function Home() {
                       className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/[0.025]"
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.025]">
-                        <ShieldCheck size={16} className="text-emerald-400" />
+                        <Fingerprint size={16} className="text-slate-400" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-mono text-xs text-slate-300">
@@ -262,7 +265,7 @@ export default function Home() {
                           {new Date(proof.created_at).toLocaleString()}
                         </div>
                       </div>
-                      <Status value={proof.status.toUpperCase()} />
+                      <Status value={proof.status} />
                       <ChevronRight size={16} className="hidden text-slate-700 sm:block" />
                     </a>
                   ))}
@@ -277,18 +280,18 @@ export default function Home() {
 
               <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-emerald-400/10 p-2.5"><ShieldCheck size={18} className="text-emerald-400" /></div>
+                  <div className="rounded-xl bg-white/[0.04] p-2.5"><ShieldCheck size={18} className="text-slate-300" /></div>
                   <div>
-                    <h3 className="text-sm font-semibold">Verification engine</h3>
-                    <p className="text-xs text-slate-600">Cryptographic integrity</p>
+                    <h3 className="text-sm font-semibold">What /verify checks</h3>
+                    <p className="text-xs text-slate-600">Per proof, on request; not execution or settlement</p>
                   </div>
                 </div>
 
                 <div className="mt-6 space-y-3">
-                  {["Payload hashes", "Canonical messages", "Ed25519 signatures", "Event chain", "DID actor identity"].map((item) => (
-                    <div key={item} className="flex items-center justify-between rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
+                  {["Payload hashes", "Canonical messages", "Ed25519 signatures", "Event chain", "Actor authorization (creator or delegate)"].map((item) => (
+                    <div key={item} className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
                       <span className="text-xs text-slate-400">{item}</span>
-                      <CheckCircle2 size={15} className="text-emerald-400" />
                     </div>
                   ))}
                 </div>

@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { evidenceBoundary } from "@/lib/evidence-boundary";
+
 const endpoints = [
   {
     method: "GET",
@@ -77,32 +79,6 @@ const createExample = `curl -X POST http://localhost:8000/proofs \\
 
 const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify`;
 
-const evidenceBoundary = [
-  {
-    endpoint: "/proofs/{proof_id}/verify",
-    proves: "The stored proof event chain and its cryptographic integrity.",
-    doesNotProve:
-      "Real model execution, TEE attestation, STARK verification, runtime settlement, or FLOP reward credit.",
-  },
-  {
-    endpoint: "/validator-attestations/accept",
-    proves: "Validator-attestation structure, signatures, field agreement and API-side acceptance.",
-    doesNotProve:
-      "Underlying TEE/DCAP verification, execution verification, runtime settlement, or reward credit.",
-  },
-  {
-    endpoint: "/proofs/{proof_id}/validator-attestations/accept",
-    proves: "Validator evidence bound to the specified stored proof and accepted at the API boundary.",
-    doesNotProve:
-      "Underlying hardware attestation, execution verification, runtime settlement, or reward credit.",
-  },
-  {
-    endpoint: "/stark-batches",
-    proves: "STARK evidence was accepted into a pending API-side verification record.",
-    doesNotProve:
-      "That the STARK proof was cryptographically verified, execution was verified, or runtime settlement occurred.",
-  },
-];
 
 const pythonExample = `from flop_proof_sdk import FlopProofClient
 
@@ -289,7 +265,7 @@ export default function DeveloperPage() {
               <div>
                 <h2 className="font-medium">Verify a proof</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Validate the complete cryptographic proof chain.
+                  Check signatures, event chain, payload hashes and actor authorization.
                 </p>
               </div>
             </div>
@@ -383,7 +359,7 @@ export default function DeveloperPage() {
               <div>
                 <h2 className="font-medium">Verification model</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Proof verification checks the complete evidence chain.
+                  What /verify checks for each event. It does not check execution or settlement.
                 </p>
               </div>
             </div>
@@ -394,17 +370,15 @@ export default function DeveloperPage() {
                 ["Previous event hash", "Linked"],
                 ["Payload hash", "Checked"],
                 ["Canonical message", "Checked"],
-                ["Ed25519 signature", "Verified"],
+                ["Ed25519 signature", "Checked"],
+                ["Actor authorization (creator or delegate)", "Checked"],
               ].map(([label, value]) => (
                 <div
                   key={label}
                   className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3"
                 >
                   <span className="text-xs text-slate-400">{label}</span>
-                  <span className="flex items-center gap-2 text-xs text-emerald-300">
-                    <CheckCircle2 size={13} />
-                    {value}
-                  </span>
+                  <span className="text-xs text-slate-300">{value}</span>
                 </div>
               ))}
             </div>

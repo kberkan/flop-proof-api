@@ -15,6 +15,11 @@ export type ProxyDecision =
 // proof_id as issued by POST /proofs: "proof_" + uuid4().hex (app/main.py).
 const PROOF_ID = /^proof_[0-9a-f]{32}$/;
 
+/** The same proof_id rule the proxy enforces, for client-side input checks. */
+export function isProofId(value: string): boolean {
+  return PROOF_ID.test(value);
+}
+
 const PROOF_STATUSES = new Set(["pending", "active", "completed", "failed"]);
 
 function proofsQuery(searchParams: URLSearchParams): string {

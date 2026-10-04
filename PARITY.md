@@ -51,9 +51,13 @@ request had no signature block and an unknown field, so it passed on a schema
 error (422). It is now named
 `test_event_with_missing_signature_and_unknown_field_is_rejected`.
 
-**Dashboard labels:** the dashboard derives its "VALID" label and its "Valid
-proofs" counter from the proof `status` (`completed`), not from the
-`/verify` verdict, and several of its green check icons are hard-coded. See
+**Dashboard labels (fixed):** the dashboard used to derive a "VALID" label and
+a "Valid proofs" counter from the proof `status` and showed hard-coded green
+checks. It now shows status as a neutral lifecycle word and takes the
+verdict, per-check results, roles and authorization from `/verify`; a missing
+or failed `/verify` is shown as "Could not verify", never as valid
+(`dashboard/src/lib/proof-view.ts`, tested in `proof-view.test.mjs`). The proof
+list still shows status only, not a verdict. See
 `docs/design/event-authorization.md` §13.
 
 # 1. Protocol / Runtime Boundary

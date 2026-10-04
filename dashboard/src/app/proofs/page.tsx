@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  CheckCircle2,
   CircleDot,
   Clock3,
   FileCheck2,
+  Flag,
   RefreshCw,
   Search,
   XCircle,
@@ -37,10 +37,11 @@ type ProofResponse = {
 };
 
 const statusMeta = {
+  // Lifecycle status only; it says nothing about whether the proof verifies.
   completed: {
-    label: "VALID",
-    icon: CheckCircle2,
-    className: "text-emerald-300 bg-emerald-400/10 border-emerald-400/20",
+    label: "COMPLETED",
+    icon: Flag,
+    className: "text-slate-300 bg-white/[0.04] border-white/10",
   },
   active: {
     label: "ACTIVE",

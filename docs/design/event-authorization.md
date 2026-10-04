@@ -345,8 +345,23 @@ Not decided by this list:
 
 ## 13. Dashboard impact
 
-Scope only; nothing in `dashboard/` changes in this slice. References are to
-the source under `dashboard/src/app/` (Next.js), not to build output. "S" below
+**Implemented** (dashboard verify-result change): items 2–5 of §13.6 are
+done; item 1 is done in part (status-derived "valid" labels are gone, but the
+list and the overview counter show status, not a verdict).
+Status is shown as a neutral lifecycle word (Pending, Active, Completed,
+Failed); the "Valid proofs" counter is now "Completed proofs". The proof page
+calls `/verify` and shows its verdict, per-check results, the evidence fields
+and, per event, `actor_did`, role and authorization; a missing or failed
+`/verify` shows "Could not verify", never "Valid". The Verification page lets
+the user choose a proof (list, ID input or `?proof_id=`) and greys out passing
+checks unless the verdict is valid. Display logic is in
+`dashboard/src/lib/proof-view.ts`, tested by `proof-view.test.mjs`. Item 6
+(proxy) was done earlier. A per-proof verdict in the list needs one `/verify`
+call per proof or an API change, and is still open.
+
+The analysis below was written before that change. Its line references are
+to the baseline commit and to the source under `dashboard/src/app/`
+(Next.js), not to build output. "S" below
 is short for `dashboard/src/app/`.
 
 ### 13.1 Endpoints, API address and key
