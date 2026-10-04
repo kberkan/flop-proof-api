@@ -67,47 +67,117 @@ const endpoints = [
   },
 ];
 
-const createExample = `curl -X POST http://localhost:8000/proofs \\
+// Examples for SDK 0.3.0 and API proof version "3" (docs/design/event-replay.md).
+// Placeholders in {braces} are filled in by the caller; the Python examples
+// run as written with FLOP_API_KEY set.
+const createExample = `# The signature is Ed25519 over FLOP/REQUEST/v3|{room}|{nonce}|{text}
+# (base64url, no padding). See "Canonical signing" below.
+curl -X POST http://localhost:8000/proofs \\
   -H "Content-Type: application/json" \\
+  -H "X-API-Key: $FLOP_API_KEY" \\
   -d '{
-    "request_id": "{request_id}",
-    "room": "{room}",
-    "nonce": "{nonce}",
-    "text": "{text}",
-    "actor_did": "did:key:z..."
+    "request": {
+      "request_id": "{request_id}",
+      "from_did": "{did}",
+      "text": "{text}",
+      "created_at": "2026-10-04T12:00:00Z",
+      "signature": {
+        "nonce": "{nonce}",
+        "sig": "{signature}",
+        "canonical": "FLOP/REQUEST/v3|{room}|{nonce}|{text}"
+      }
+    }
   }'`;
 
-const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify`;
+const appendExample = `# The signature is Ed25519 over
+# FLOP/EVENT/v3|{proof_id}|agent.started|{payload_hash}|{event_nonce};
+# payload_hash is the SHA-256 hex of the payload as compact, key-sorted JSON.
+curl -X POST http://localhost:8000/proofs/{proof_id}/events \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: $FLOP_API_KEY" \\
+  -d '{
+    "type": "agent.started",
+    "actor_did": "{did}",
+    "payload": {"step": 1},
+    "signature": {
+      "nonce": "{event_nonce}",
+      "sig": "{event_signature}",
+      "canonical": "FLOP/EVENT/v3|{proof_id}|agent.started|{payload_hash}|{event_nonce}"
+    }
+  }'`;
 
+const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify \\
+  -H "X-API-Key: $FLOP_API_KEY"`;
 
-const pythonExample = `from flop_proof_sdk import FlopProofClient
+const installExample = `pip install dist/flop_proof_sdk-0.3.0-py3-none-any.whl`;
 
-client = FlopProofClient("http://localhost:8000")
+const pythonExample = `import os
+import uuid
+from datetime import datetime, timezone
 
-proof = client.create_proof(
-    request_id="{request_id}",
-    room="{room}",
-    nonce="{nonce}",
-    text="{text}",
-    actor_did="did:key:z...",
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from flop_proof_sdk import FlopProofClient, public_key_to_test_did
+
+client = FlopProofClient(
+    "http://localhost:8000",
+    api_key=os.environ["FLOP_API_KEY"],
+)
+
+private_key = Ed25519PrivateKey.generate()
+did = public_key_to_test_did(private_key.public_key())
+
+proof = client.create_signed_proof(
+    private_key=private_key,
+    did=did,
+    text="Summarize the report",
+    room="demo-room",
+    nonce=f"request-{uuid.uuid4().hex}",
+    request_id=f"demo-{uuid.uuid4().hex}",
+    created_at=datetime.now(timezone.utc).isoformat(),
+)
+
+client.append_signed_event(
+    proof_id=proof["proof_id"],
+    private_key=private_key,
+    did=did,
+    event_type="result.created",
+    payload={"content": "summary text"},
+    nonce=f"event-{uuid.uuid4().hex}",
 )
 
 result = client.verify_proof(proof["proof_id"])
 
-print(result["verdict"])`;
+print(proof["version"], result["verdict"])`;
 
-const signingExample = `from flop_proof_sdk import (
-    canonical_signed_message,
+const signingExample = `from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from flop_proof_sdk import (
+    build_event_canonical_v3,
+    build_request_canonical_v3,
+    sha256_json,
     sign_message,
 )
 
-message = canonical_signed_message(
-    room="{room}",
-    nonce="{nonce}",
-    text="{text}",
-)
+private_key = Ed25519PrivateKey.generate()
 
-signature = sign_message(private_key, message)`;
+# Request: FLOP/REQUEST/v3|room|nonce|text. room and nonce must not contain
+# "|" or control characters; text may.
+request_canonical = build_request_canonical_v3(
+    "demo-room", "request-nonce-1", "Summarize | report"
+)
+request_signature = sign_message(private_key, request_canonical.encode("utf-8"))
+
+# Event: FLOP/EVENT/v3|proof_id|type|payload_hash|nonce. The nonce is signed.
+payload = {"content": "summary text"}
+event_canonical = build_event_canonical_v3(
+    "proof_0123456789abcdef0123456789abcdef",
+    "result.created",
+    sha256_json(payload),
+    "event-nonce-1",
+)
+event_signature = sign_message(private_key, event_canonical.encode("utf-8"))
+
+print(request_canonical)
+print(event_canonical)`;
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
@@ -261,6 +331,20 @@ export default function DeveloperPage() {
 
           <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
             <div className="flex items-center gap-3">
+              <Code2 size={18} />
+              <div>
+                <h2 className="font-medium">Append an event</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Events on version-3 proofs sign their nonce.
+                </p>
+              </div>
+            </div>
+
+            <CodeBlock>{appendExample}</CodeBlock>
+          </section>
+
+          <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+            <div className="flex items-center gap-3">
               <ShieldCheck size={18} />
               <div>
                 <h2 className="font-medium">Verify a proof</h2>
@@ -287,9 +371,7 @@ export default function DeveloperPage() {
           </div>
 
           <div className="mt-5 rounded-xl border border-white/[0.06] bg-black/20 p-4">
-            <code className="text-xs text-emerald-300">
-              pip install git+https://github.com/kberkan/flop-proof-api.git
-            </code>
+            <code className="text-xs text-emerald-300">{installExample}</code>
           </div>
 
           <CodeBlock>{pythonExample}</CodeBlock>
@@ -345,7 +427,7 @@ export default function DeveloperPage() {
               <div>
                 <h2 className="font-medium">Canonical signing</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Deterministic request signing before transmission.
+                  Version-3 request and event messages, signed before transmission.
                 </p>
               </div>
             </div>
@@ -371,6 +453,9 @@ export default function DeveloperPage() {
                 ["Payload hash", "Checked"],
                 ["Canonical message", "Checked"],
                 ["Ed25519 signature", "Checked"],
+                ["Request binding (request.created)", "Checked"],
+                ["Message format (v3 tags; legacy v1/v2)", "Checked"],
+                ["Replayed events in the proof", "Rejected"],
                 ["Actor authorization (creator or delegate)", "Checked"],
               ].map(([label, value]) => (
                 <div

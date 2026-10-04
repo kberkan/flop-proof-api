@@ -381,7 +381,7 @@ Approved for implementation. Section numbers refer to this document.
 | D-R5 | v1/v2 proofs stay verifiable. Option B applies to new events appended to them and in the verifier: the same (canonical, signature) pair is not accepted twice in one proof. | §4, §5; §6 q3, q6 |
 | D-R6 | The nonce is included for all events, old ones too, in `GET /proofs/{id}`, `/verify` and the exported JSON. For v3 the verifier checks the tag and nonce uniqueness within the proof. | §2.3, §3.2; §6 q5, q6 |
 | D-R7 | The root `client.py` (an old copy of the SDK) is removed; tests that import it use `flop_proof_sdk`. The SDK moves to the new format in the same change, with a version bump. | §3.4; §6 q7 |
-| D-R8 | The dashboard Developer page examples are updated in a separate slice after this change. | §3.6 |
+| D-R8 | The dashboard Developer page examples are updated in a separate slice after this change. **Implemented:** the Developer page uses the version-3 formats and SDK 0.3.0, and the proof pages show `request_binding_valid`, `format_valid`, `replay_valid`, `proof_version` and event nonces. | §3.6 |
 | D-R9 | `PROOF_ID_PATTERN` is always applied with `fullmatch` (in Python, `$` also matches before a trailing `\n`). The Python–JS pattern test compares behavior, not the pattern text (trailing `\n`, `\r\n`, spaces, and so on). | §1.2 |
 | D-R10 | In v3, `room`, `nonce` and `type` must not contain control characters (`\x00`–`\x1f`, `\x7f`). `text` is free. | §3.1 |
 | D-R11 | The v1/v2 verification path rejects every request or event canonical that starts with `FLOP/` (no cross-version reading). | §3.3 |

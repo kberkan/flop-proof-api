@@ -61,6 +61,21 @@ or failed `/verify` is shown as "Could not verify", never as valid
 list still shows status only, not a verdict. See
 `docs/design/event-authorization.md` §13.
 
+**Dashboard, version-3 verification output (fixed):** the detail and
+verification pages also show `request_binding_valid`, `format_valid` and
+`replay_valid`, per proof and per event (Pass / Fail / Not applicable / Not
+available), the proof format from `proof_version` ("Format: v3" or "Format:
+legacy v1/v2", with a note that v1/v2 replay protection rests on rejecting a
+repeated (canonical, signature) pair), and each event's nonce. The badge is
+never "Valid" unless `format_valid` and `replay_valid` are true on every event
+and `request_binding_valid` is true on `request.created`; on other events a
+null `request_binding_valid` is "Not applicable" and does not count. The
+Developer page examples use the version-3 request body and canonicals and SDK
+0.3.0, and were run against a temporary API. The proof list shows "Could not
+refresh proofs; showing previous data." when a refresh fails, and "Proofs could
+not be loaded." when there is no previous data, as the actors page does. See
+`docs/design/event-replay.md` D-R8.
+
 # 1. Protocol / Runtime Boundary
 
 | Capability | Status | Risk | Exact nuance |

@@ -17,11 +17,14 @@ import {
 import { verifyBoundary } from "@/lib/evidence-boundary";
 import {
   type CardTone,
+  type CheckState,
   type VerifyState,
   cardTone,
+  checkStateLabel,
   eventRows,
   evidenceChecks,
   evidenceSummary,
+  proofFormat,
   statusLabel,
   verdictBadge,
 } from "@/lib/proof-view";
@@ -48,6 +51,13 @@ const CHECK_STYLE: Record<CardTone, { icon: typeof CheckCircle2; className: stri
   "pass-muted": { icon: CheckCircle2, className: "text-slate-400", text: "Pass" },
   fail: { icon: XCircle, className: "text-red-400", text: "Fail" },
   unknown: { icon: CircleHelp, className: "text-slate-500", text: "Not available" },
+};
+
+const EVENT_CHECK_STYLE: Record<CheckState, string> = {
+  pass: "text-slate-300",
+  fail: "text-red-300",
+  "not-applicable": "text-slate-600",
+  "not-available": "text-slate-500",
 };
 
 function formatValue(value: unknown) {
@@ -132,6 +142,7 @@ export default function ProofDetailPage({
   const verifyData = verify.kind === "result" ? verify.data : null;
   const checks = evidenceChecks(verifyData);
   const evidence = evidenceSummary(verifyData);
+  const format = proofFormat(verifyData);
   const events = Array.isArray(proof?.events) ? proof.events : [];
   const rows = eventRows(events, verifyData);
 
@@ -184,6 +195,14 @@ export default function ProofDetailPage({
                 <div className="text-xs text-slate-500">
                   Lifecycle status: <span className="text-slate-300">{statusLabel(proof.status)}</span>
                 </div>
+                <div data-testid="proof-format" data-version={format.version ?? ""} className="text-xs text-slate-300">
+                  {format.label}
+                </div>
+                {format.note && (
+                  <p data-testid="legacy-note" className="max-w-md text-xs leading-5 text-slate-500 lg:text-right">
+                    {format.note}
+                  </p>
+                )}
               </div>
             </header>
 
@@ -299,7 +318,7 @@ export default function ProofDetailPage({
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-slate-200">{row.type}</p>
 
-                          <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
+                          <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-4">
                             <div>
                               <dt className="text-[10px] uppercase tracking-[0.14em] text-slate-600">Actor</dt>
                               <dd className="mt-1 font-mono text-slate-300" title={row.actorDid ?? undefined}>
@@ -321,7 +340,28 @@ export default function ProofDetailPage({
                                 )}
                               </dd>
                             </div>
+                            <div>
+                              <dt className="text-[10px] uppercase tracking-[0.14em] text-slate-600">Nonce</dt>
+                              <dd
+                                data-nonce={row.nonce ?? ""}
+                                className="mt-1 font-mono text-slate-300"
+                                title={row.nonce ?? undefined}
+                              >
+                                {row.nonceShort}
+                              </dd>
+                            </div>
                           </dl>
+
+                          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                            {row.checks.map((item) => (
+                              <li key={item.key} data-event-check={item.key} data-state={item.state}>
+                                <span className="text-slate-600">{item.label}: </span>
+                                <span className={EVENT_CHECK_STYLE[item.state]}>
+                                  {checkStateLabel(item.state)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
 
                           <pre className="mt-4 overflow-x-auto rounded-lg border border-white/[0.05] bg-[#06080c] p-4 text-[11px] leading-5 text-slate-500">
                             {formatValue(events[row.index])}

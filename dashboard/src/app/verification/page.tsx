@@ -19,8 +19,10 @@ import {
   type CardTone,
   type VerifyState,
   cardTone,
+  checkStateLabel,
   eventRows,
   evidenceChecks,
+  proofFormat,
   statusLabel,
   verdictBadge,
 } from "@/lib/proof-view";
@@ -145,6 +147,7 @@ function VerificationCenter() {
   const verifyData = verify?.kind === "result" ? verify.data : null;
   const checks = evidenceChecks(verifyData);
   const rows = eventRows(events, verifyData);
+  const format = proofFormat(verifyData);
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
@@ -233,6 +236,16 @@ function VerificationCenter() {
                       {badge.label}
                     </div>
                     {badge.detail && <p className="mt-1 text-xs text-slate-500">{badge.detail}</p>}
+                    {verifyData !== null && (
+                      <p data-testid="proof-format" data-version={format.version ?? ""} className="mt-1 text-xs text-slate-300">
+                        {format.label}
+                      </p>
+                    )}
+                    {format.note && (
+                      <p data-testid="legacy-note" className="mt-1 max-w-xl text-xs leading-5 text-slate-500">
+                        {format.note}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {selected && (
@@ -249,7 +262,7 @@ function VerificationCenter() {
               </div>
             </section>
 
-            <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {checks.map((check) => {
                 const style = CARD_STYLE[cardTone(check.ok, badge.tone)];
                 const Icon = style.icon;
@@ -270,12 +283,14 @@ function VerificationCenter() {
 
             {rows.length > 0 && (
               <section className="mt-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]">
-                <div className="grid grid-cols-[60px_1fr_1.4fr_120px_1fr] border-b border-white/[0.07] px-5 py-3 text-[10px] uppercase tracking-[0.16em] text-slate-600">
+                <div className="grid grid-cols-[50px_1fr_1.2fr_100px_1fr_1fr_1.4fr] border-b border-white/[0.07] px-5 py-3 text-[10px] uppercase tracking-[0.16em] text-slate-600">
                   <span>Seq</span>
                   <span>Event</span>
                   <span>Actor</span>
                   <span>Role</span>
                   <span>Authorized</span>
+                  <span>Nonce</span>
+                  <span>Event checks</span>
                 </div>
                 {rows.map((row) => (
                   <div
@@ -283,7 +298,7 @@ function VerificationCenter() {
                     data-event-sequence={row.sequence ?? ""}
                     data-role={row.role}
                     data-authorized={String(row.authorized)}
-                    className={`grid grid-cols-[60px_1fr_1.4fr_120px_1fr] items-center border-b border-white/[0.05] px-5 py-3 text-xs ${
+                    className={`grid grid-cols-[50px_1fr_1.2fr_100px_1fr_1fr_1.4fr] items-center border-b border-white/[0.05] px-5 py-3 text-xs ${
                       row.flagged ? "bg-red-400/[0.06] text-red-200" : "text-slate-300"
                     }`}
                   >
@@ -298,6 +313,17 @@ function VerificationCenter() {
                       {row.authorizationReason && (
                         <span className="ml-2 font-mono">({row.authorizationReason})</span>
                       )}
+                    </span>
+                    <span className="truncate font-mono" data-nonce={row.nonce ?? ""} title={row.nonce ?? undefined}>
+                      {row.nonceShort}
+                    </span>
+                    <span className="flex flex-col">
+                      {row.checks.map((item) => (
+                        <span key={item.key} data-event-check={item.key} data-state={item.state}>
+                          <span className="text-slate-600">{item.label}: </span>
+                          {checkStateLabel(item.state)}
+                        </span>
+                      ))}
                     </span>
                   </div>
                 ))}

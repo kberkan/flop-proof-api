@@ -64,11 +64,13 @@ export default function ProofsPage() {
   const [data, setData] = useState<ProofResponse | null>(null);
   const [search, setSearch] = useState("");
   // Each load is a request; loading is derived from whether the latest
-  // request has settled. The last loaded data stays visible meanwhile.
+  // request has settled. The last loaded data stays visible meanwhile, and a
+  // failed load says so instead of passing old data off as current.
   const [request, setRequest] = useState({ status: "all", id: 0 });
-  const [settledId, setSettledId] = useState<number | null>(null);
+  const [settled, setSettled] = useState<{ id: number; ok: boolean } | null>(null);
   const status = request.status;
-  const loading = settledId !== request.id;
+  const loading = settled?.id !== request.id;
+  const failed = settled?.id === request.id && !settled.ok;
 
   useEffect(() => {
     let cancelled = false;
@@ -82,13 +84,14 @@ export default function ProofsPage() {
           throw new Error(`API returned ${response.status}`);
         }
         const result = (await response.json()) as ProofResponse;
-        if (!cancelled) setData(result);
+        if (!cancelled) {
+          setData(result);
+          setSettled({ id: request.id, ok: true });
+        }
       })
       .catch(() => {
-        // As before: a failed load keeps the previous data on screen.
-      })
-      .finally(() => {
-        if (!cancelled) setSettledId(request.id);
+        // The previous data stays on screen, with a warning (see below).
+        if (!cancelled) setSettled({ id: request.id, ok: false });
       });
 
     return () => {
@@ -205,6 +208,16 @@ export default function ProofsPage() {
           </div>
         </div>
 
+        {failed && data && (
+          <div
+            role="alert"
+            data-testid="proofs-load-warning"
+            className="mb-5 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-4 py-3 text-sm text-amber-300"
+          >
+            Could not refresh proofs; showing previous data.
+          </div>
+        )}
+
         <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]">
           <div className="grid grid-cols-[1.7fr_1fr_120px_110px_180px] border-b border-white/[0.07] px-6 py-4 text-[10px] uppercase tracking-[0.18em] text-slate-600">
             <span>Proof</span>
@@ -217,6 +230,10 @@ export default function ProofsPage() {
           {loading && !data ? (
             <div className="px-6 py-16 text-center text-sm text-slate-600">
               Loading proof records...
+            </div>
+          ) : failed && !data ? (
+            <div data-testid="proofs-load-warning" className="px-6 py-16 text-center text-sm text-red-400">
+              Proofs could not be loaded.
             </div>
           ) : proofs.length === 0 ? (
             <div className="px-6 py-16 text-center text-sm text-slate-600">
