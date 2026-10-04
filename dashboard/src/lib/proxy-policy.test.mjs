@@ -16,6 +16,7 @@ const ALLOWED = [
   [`proofs/${PROOF_ID}`, `/proofs/${PROOF_ID}`],
   [`proofs/${PROOF_ID}/verify`, `/proofs/${PROOF_ID}/verify`],
   ["actors", "/actors"],
+  ["health", "/health"],
 ];
 
 for (const [path, upstream] of ALLOWED) {
@@ -45,7 +46,8 @@ const REJECTED_PATHS = {
   "malformed proof_id": "proofs/proof_XYZ",
   "uppercase hex proof_id": `proofs/${PROOF_ID.toUpperCase()}`,
   "unknown sub-resource": `proofs/${PROOF_ID}/events`,
-  "health": "health",
+  "health sub-path": "health/x",
+  "health trailing slash": "health/",
   "validator attestations": "validator-attestations/accept",
   "stark batches": "stark-batches",
   "actors sub-path": "actors/x",
@@ -79,8 +81,16 @@ test("proofs drops out-of-range or malformed limit and unknown status", () => {
   }
 });
 
-test("detail, verify and actors drop every query parameter", () => {
-  for (const path of [`proofs/${PROOF_ID}`, `proofs/${PROOF_ID}/verify`, "actors"]) {
+test("detail, verify, actors and health drop every query parameter", () => {
+  for (const path of [`proofs/${PROOF_ID}`, `proofs/${PROOF_ID}/verify`, "actors", "health"]) {
     assert.equal(evaluate("GET", path, "limit=8&status=active").search, "", path);
   }
+});
+
+test("health forwards no query parameter", () => {
+  assert.deepEqual(evaluate("GET", "health", "debug=1&api_key=x"), {
+    allowed: true,
+    path: "/health",
+    search: "",
+  });
 });

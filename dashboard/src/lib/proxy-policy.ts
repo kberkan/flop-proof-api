@@ -7,6 +7,7 @@
 //   GET proofs/{proof_id}                          src/app/proofs/[proof_id]/page.tsx
 //   GET proofs/{proof_id}/verify                   src/app/verification/page.tsx
 //   GET actors                                     src/app/actors/page.tsx
+//   GET health                (no query)           src/app/developer/page.tsx
 
 export type ProxyDecision =
   | { allowed: true; path: string; search: string }
@@ -65,6 +66,10 @@ export function evaluateProxyRequest(
 
   if (first === "actors" && pathSegments.length === 1) {
     return { allowed: true, path: "/actors", search: "" };
+  }
+
+  if (first === "health" && pathSegments.length === 1) {
+    return { allowed: true, path: "/health", search: "" };
   }
 
   if (first !== "proofs") {
