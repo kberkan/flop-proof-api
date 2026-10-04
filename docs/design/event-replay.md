@@ -1,7 +1,7 @@
 # Event replay (design)
 
-Status: **draft, not implemented.** Baseline for line references: commit
-`d9cfc37`.
+Status: **design approved, not implemented.** See *Decisions* at the end.
+Baseline for line references: commit `d9cfc37`.
 
 Measurements in this document were taken in memory (SQLite `StaticPool`,
 `TestClient`), without writing to `proofs.db`.
@@ -201,7 +201,8 @@ change, or should be removed (`event-authorization.md` §10).
 
 | File:line | Use |
 |---|---|
-| `test_client.py:65` | E2E script; also writes `/tmp/flop-proof.json`, which `test_verifier.py` reuses (`test_verifier.py:9-17`). A stale file from before the change would be verified under the old rule. |
+| `test_client.py:65` | E2E script; also writes `/tmp/flop-proof.json`. Since `17fa21d` no test reads that file. |
+| `test_verifier.py:83` | `proof_file` fixture: builds a fresh four-event proof through the API in `tmp_path` on every run (`17fa21d`), so it follows the API's canonical and needs no stale-file handling. |
 | `test_event_replay.py:64` | exact replay (same nonce) → 409 |
 | `test_lifecycle.py:68` | lifecycle appends |
 | `test_lifecycle.py:255` | direct `create_event` with a non-standard canonical (concurrency test; not verified) |
@@ -263,18 +264,20 @@ version `"1"`/`"2"` proofs, in both the API and the verifier.
 Open questions for a *Decisions* section:
 
 1. Proof version `"3"` for the new canonical (§3.3 A1), or per-event format?
+   **Resolved by D-R1.**
 2. Domain tag text, and whether requests also get a tag (`FLOP/REQUEST/v2`),
-   which is a request wire-format change (§3.1).
+   which is a request wire-format change (§3.1). **Resolved by D-R2, D-R3.**
 3. For old proofs, is B acceptable given that it rejects identical
-   legitimate events (§4)?
+   legitimate events (§4)? **Resolved by D-R5.**
 4. Should §1.2 be fixed on its own before this work, e.g. by making
    `verify_floop_signature` reject a canonical whose room is a `proof_` id?
-5. Export `nonce` for all events, including old ones (§3.2)?
+   **Resolved: minimal fix applied (see §1.2).**
+5. Export `nonce` for all events, including old ones (§3.2)? **Resolved by D-R6.**
 6. Should the verifier check nonce uniqueness for new proofs (§3.2), and B for
-   old ones?
+   old ones? **Resolved by D-R5, D-R6.**
 7. SDK compatibility window: is a 401 for an old SDK on version-3 proofs
    acceptable, or does the API need to accept both formats for a period
-   (which reopens downgrade, §3.3 A2)?
+   (which reopens downgrade, §3.3 A2)? **Resolved by D-R4, D-R7.**
 
 ## 7. Tests
 
@@ -298,5 +301,20 @@ New tests:
 - Export contains `nonce`; offline and API verification agree.
 - SDK end to end: `append_signed_event` on a version-3 proof → 201; replay
   with a new nonce → 401.
-- `test_verifier.py`: regenerate `/tmp/flop-proof.json` instead of reusing a
-  stale file (§3.5).
+- `test_verifier.py`: done in `17fa21d`; the `proof_file` fixture builds its
+  proof in `tmp_path` on every run (§3.5).
+
+## Decisions
+
+Approved for implementation. Section numbers refer to this document.
+
+| # | Decision | Section |
+|---|---|---|
+| D-R1 | Proof version `"3"`. The server creates every new proof as `"3"`; only the server sets the version. | §3.3 A1; §6 q1 |
+| D-R2 | Both message kinds carry a domain tag. Request: `FLOP/REQUEST/v3\|room\|nonce\|text`. Event: `FLOP/EVENT/v3\|proof_id\|type\|payload_hash\|nonce`. The tag version equals the proof version. | §3.1; §6 q2 |
+| D-R3 | In v3, `room`, `nonce` and `type` must not contain `\|`. In a request, `text` is the last field and may contain `\|`. Reason: otherwise different field combinations could produce the same signed text (parsing ambiguity). | §3.1; §6 q2 |
+| D-R4 | An untagged (old-format) proof request is rejected before any proof is created. There is no compatibility window, so old clients cannot produce half-usable proofs. | §3.3, §3.4; §6 q7 |
+| D-R5 | v1/v2 proofs stay verifiable. Option B applies to new events appended to them and in the verifier: the same (canonical, signature) pair is not accepted twice in one proof. | §4, §5; §6 q3, q6 |
+| D-R6 | The nonce is included for all events, old ones too, in `GET /proofs/{id}`, `/verify` and the exported JSON. For v3 the verifier checks the tag and nonce uniqueness within the proof. | §2.3, §3.2; §6 q5, q6 |
+| D-R7 | The root `client.py` (an old copy of the SDK) is removed; tests that import it use `flop_proof_sdk`. The SDK moves to the new format in the same change, with a version bump. | §3.4; §6 q7 |
+| D-R8 | The dashboard Developer page examples are updated in a separate slice after this change. | §3.6 |
