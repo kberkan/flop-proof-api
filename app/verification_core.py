@@ -5,10 +5,49 @@ from .authorization import authorize_event, check_single_result_created
 from .crypto import (
     compute_task_hash,
     hash_event_record,
+    is_proof_id,
     sha256_bytes,
     sha256_json,
     verify_canonical_signature,
 )
+
+
+def _request_binding_ok(
+    canonical: Any,
+    signature: Any,
+    actor_did: Any,
+    payload: Any,
+) -> bool:
+    """Check that a request.created event is bound to its own request.
+
+    The request canonical is room|nonce|text (app/crypto.py,
+    canonical_signed_message). The room is not stored separately; it is read
+    from the canonical. The canonical must rebuild from its parts, its nonce
+    and text must equal the stored request's, the stored signature and actor
+    must be the request's, and the room must not be a proof_id (an event
+    canonical proof_id|type|payload_hash would otherwise pass as a request;
+    docs/design/event-replay.md §1.2).
+    """
+    if not isinstance(payload, dict) or not isinstance(canonical, str):
+        return False
+    request_signature = payload.get("signature")
+    if not isinstance(request_signature, dict):
+        return False
+
+    parts = canonical.split("|", 2)
+    if len(parts) != 3:
+        return False
+    room, nonce, text = parts
+
+    return (
+        bool(room)
+        and not is_proof_id(room)
+        and f"{room}|{nonce}|{text}" == canonical
+        and nonce == request_signature.get("nonce")
+        and text == payload.get("text")
+        and signature == request_signature.get("sig")
+        and actor_did == payload.get("from_did")
+    )
 
 
 def verify_proof_events(
@@ -92,7 +131,11 @@ def verify_proof_events(
                 bool(expected_canonical)
                 and canonical == expected_canonical
             )
+            request_binding_ok = _request_binding_ok(
+                canonical, signature, actor_did, payload
+            )
         else:
+            request_binding_ok = None
             expected_canonical = (
                 f"{proof_id}|{event_type}|{payload_hash}"
             )
@@ -137,6 +180,8 @@ def verify_proof_events(
                 "payload_hash_valid": payload_hash_ok,
                 "canonical_valid": canonical_ok,
                 "signature_valid": signature_ok,
+                # request.created only; None for other event types.
+                "request_binding_valid": request_binding_ok,
                 "actor_did": actor_did,
                 "role": role,
                 "actor_authorized": authorization_reason is None,
@@ -144,7 +189,12 @@ def verify_proof_events(
             }
         )
 
-        if signature_ok and canonical_ok and payload_hash_ok:
+        if (
+            signature_ok
+            and canonical_ok
+            and payload_hash_ok
+            and request_binding_ok is not False
+        ):
             authorization_prior.append(
                 {
                     "type": event_type,
@@ -163,6 +213,7 @@ def verify_proof_events(
         and check["payload_hash_valid"]
         and check["canonical_valid"]
         and check["signature_valid"]
+        and check["request_binding_valid"] is not False
         and check["actor_authorized"]
         for check in checks
     )

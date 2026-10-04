@@ -5,6 +5,7 @@ from fractions import Fraction
 from typing import Protocol
 
 import json
+import re
 
 import base58
 import sr25519
@@ -971,6 +972,16 @@ def verify_canonical_signature(
     )
 
 
+# proof_id as issued by POST /proofs: "proof_" + uuid4().hex. The dashboard
+# proxy uses the same pattern (dashboard/src/lib/proxy-policy.ts); a test
+# checks that the two stay identical.
+PROOF_ID_PATTERN = re.compile(r"^proof_[0-9a-f]{32}$")
+
+
+def is_proof_id(value: str) -> bool:
+    return PROOF_ID_PATTERN.match(value) is not None
+
+
 def verify_floop_signature(
     did: str,
     nonce: str,
@@ -986,6 +997,13 @@ def verify_floop_signature(
     room, canonical_nonce, canonical_text = expected_parts
 
     if not room:
+        return False
+
+    # An event canonical is proof_id|type|payload_hash, which also splits
+    # into room|nonce|text. Refuse it as a request so an event signature
+    # cannot create a proof (docs/design/event-replay.md §1.2). Minimal fix;
+    # domain-tagged messages are the planned replacement.
+    if is_proof_id(room):
         return False
 
     if canonical_nonce != nonce:

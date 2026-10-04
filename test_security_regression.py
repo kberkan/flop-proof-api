@@ -641,3 +641,164 @@ def test_concurrent_result_created_admits_exactly_one(file_db):
         assert statuses == [201, 409]
         assert results == 1
         assert sequences == [1, 2]
+
+
+# ---------------------------------------------------------------------------
+# Event signatures must not work as proof request signatures
+# (docs/design/event-replay.md §1.2)
+# ---------------------------------------------------------------------------
+
+
+def _victim_event_signature():
+    """A victim's proof and one correctly signed event on it."""
+    proof, victim_key, victim_did = create_proof()
+    proof_id = proof["proof_id"]
+    payload = {"step": 1}
+    event = signed_event(victim_key, victim_did, proof_id, "agent.started", payload)
+    assert client.post(f"/proofs/{proof_id}/events", json=event).status_code == 201
+    return victim_did, event, sha256_json(payload)
+
+
+def _request_from_event_signature(victim_did, event, payload_hash):
+    """The attacker's POST /proofs body: the event canonical
+    proof_id|type|payload_hash parsed as room|nonce|text."""
+    return {
+        "request": {
+            "request_id": f"attacker-{uuid.uuid4().hex}",
+            "from_did": victim_did,
+            "text": payload_hash,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "signature": {
+                "nonce": event["type"],
+                "sig": event["signature"]["sig"],
+                "canonical": event["signature"]["canonical"],
+            },
+        }
+    }
+
+
+def test_event_signature_cannot_create_proof():
+    victim_did, event, payload_hash = _victim_event_signature()
+    forged = _request_from_event_signature(victim_did, event, payload_hash)
+
+    response = client.post("/proofs", json=forged)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid request signature"}
+    listing = client.get("/proofs", params={"limit": 100}).json()["items"]
+    assert all(item["request_id"] != forged["request"]["request_id"] for item in listing)
+
+
+def test_verify_rejects_proof_created_from_event_signature(in_memory_db):
+    """The forged proof is written directly, bypassing POST /proofs."""
+    from app.events import create_event
+    from app.models import Proof
+
+    victim_did, event, payload_hash = _victim_event_signature()
+    request = _request_from_event_signature(victim_did, event, payload_hash)["request"]
+    proof_id = f"proof_{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc)
+
+    db = in_memory_db()
+    try:
+        db.add(
+            Proof(
+                proof_id=proof_id,
+                request_id=request["request_id"],
+                version="2",
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        create_event(
+            db=db,
+            proof_id=proof_id,
+            event_type="request.created",
+            actor_did=victim_did,
+            payload=request,
+            canonical=request["signature"]["canonical"],
+            signature=request["signature"]["sig"],
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    verification = client.get(f"/proofs/{proof_id}/verify").json()
+
+    assert verification["verdict"] == "invalid"
+    assert verification["checks"][0]["request_binding_valid"] is False
+
+
+def test_request_with_ordinary_room_is_still_accepted():
+    proof, _, _ = create_proof()
+
+    verification = client.get(f"/proofs/{proof['proof_id']}/verify").json()
+
+    assert verification["verdict"] == "valid"
+    assert verification["checks"][0]["request_binding_valid"] is True
+
+
+def test_verify_rejects_request_whose_stored_text_differs_from_signed_text(in_memory_db):
+    """Every other check passes; only the request binding fails."""
+    from app.events import create_event
+    from app.models import Proof
+
+    private_key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+    request = make_signed_request(private_key, did, f"security-{uuid.uuid4().hex}", text="signed text")["request"]
+    request["text"] = "different stored text"
+    proof_id = f"proof_{uuid.uuid4().hex}"
+    now = datetime.now(timezone.utc)
+
+    db = in_memory_db()
+    try:
+        db.add(
+            Proof(
+                proof_id=proof_id,
+                request_id=request["request_id"],
+                version="2",
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        create_event(
+            db=db,
+            proof_id=proof_id,
+            event_type="request.created",
+            actor_did=did,
+            payload=request,
+            canonical=request["signature"]["canonical"],
+            signature=request["signature"]["sig"],
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    check = client.get(f"/proofs/{proof_id}/verify").json()["checks"][0]
+
+    assert (check["payload_hash_valid"], check["canonical_valid"], check["signature_valid"]) == (
+        True,
+        True,
+        True,
+    )
+    assert check["request_binding_valid"] is False
+    assert client.get(f"/proofs/{proof_id}/verify").json()["verdict"] == "invalid"
+
+
+def test_proof_id_pattern_matches_generated_ids_and_dashboard_proxy():
+    import re
+    from pathlib import Path
+
+    from app.crypto import PROOF_ID_PATTERN, is_proof_id
+
+    proof, _, _ = create_proof()
+    assert is_proof_id(proof["proof_id"])
+    assert is_proof_id(f"proof_{uuid.uuid4().hex}")
+    for value in ("proof_", "proof_XYZ", f"proof_{uuid.uuid4().hex}x", "security-room"):
+        assert not is_proof_id(value)
+
+    proxy = (Path(__file__).parent / "dashboard/src/lib/proxy-policy.ts").read_text()
+    dashboard_pattern = re.search(r"const PROOF_ID = /(.+)/;", proxy).group(1)
+    assert dashboard_pattern == PROOF_ID_PATTERN.pattern
