@@ -28,34 +28,40 @@ type ActorsResponse = {
 
 export default function ActorsPage() {
   const [actors, setActors] = useState<Actor[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  async function loadActors() {
-    try {
-      setError("");
-
-      const response = await fetch("/api/flop/actors", {
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to load actors");
-      }
-
-      const data = (await response.json()) as ActorsResponse;
-
-      setActors(data.items ?? []);
-    } catch {
-      setError("Actors could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Each load is a request. As before, only the first load shows the
+  // loading state; a refresh keeps the current list on screen.
+  const [requestId, setRequestId] = useState(0);
+  const [settled, setSettled] = useState(false);
+  const loading = !settled;
 
   useEffect(() => {
-    loadActors();
-  }, []);
+    let cancelled = false;
+
+    fetch("/api/flop/actors", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load actors");
+        }
+        const data = (await response.json()) as ActorsResponse;
+        if (!cancelled) setActors(data.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Actors could not be loaded.");
+      })
+      .finally(() => {
+        if (!cancelled) setSettled(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId]);
+
+  function loadActors() {
+    setError("");
+    setRequestId((previous) => previous + 1);
+  }
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">

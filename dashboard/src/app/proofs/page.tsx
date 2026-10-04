@@ -63,32 +63,48 @@ const statusMeta = {
 export default function ProofsPage() {
   const [data, setData] = useState<ProofResponse | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
-  const [loading, setLoading] = useState(true);
-
-  async function loadProofs() {
-    setLoading(true);
-
-    try {
-      const query = status === "all"
-        ? "/api/flop/proofs?limit=100"
-        : `/api/flop/proofs?limit=100&status=${status}`;
-
-      const response = await fetch(query, { cache: "no-store" });
-
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
-      }
-
-      setData(await response.json());
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Each load is a request; loading is derived from whether the latest
+  // request has settled. The last loaded data stays visible meanwhile.
+  const [request, setRequest] = useState({ status: "all", id: 0 });
+  const [settledId, setSettledId] = useState<number | null>(null);
+  const status = request.status;
+  const loading = settledId !== request.id;
 
   useEffect(() => {
-    loadProofs();
-  }, [status]);
+    let cancelled = false;
+    const query = request.status === "all"
+      ? "/api/flop/proofs?limit=100"
+      : `/api/flop/proofs?limit=100&status=${request.status}`;
+
+    fetch(query, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+        const result = (await response.json()) as ProofResponse;
+        if (!cancelled) setData(result);
+      })
+      .catch(() => {
+        // As before: a failed load keeps the previous data on screen.
+      })
+      .finally(() => {
+        if (!cancelled) setSettledId(request.id);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [request]);
+
+  function reload() {
+    setRequest((previous) => ({ ...previous, id: previous.id + 1 }));
+  }
+
+  function selectStatus(next: string) {
+    setRequest((previous) =>
+      previous.status === next ? previous : { status: next, id: previous.id + 1 },
+    );
+  }
 
   const proofs = (data?.items ?? []).filter((proof) => {
     const q = search.toLowerCase().trim();
@@ -135,7 +151,7 @@ export default function ProofsPage() {
           </div>
 
           <button
-            onClick={loadProofs}
+            onClick={reload}
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-slate-300 hover:bg-white/[0.07]"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
@@ -176,7 +192,7 @@ export default function ProofsPage() {
             {["all", "pending", "active", "completed", "failed"].map((item) => (
               <button
                 key={item}
-                onClick={() => setStatus(item)}
+                onClick={() => selectStatus(item)}
                 className={`rounded-xl border px-4 py-2.5 text-xs font-medium capitalize ${
                   status === item
                     ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"

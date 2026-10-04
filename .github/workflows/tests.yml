@@ -107,3 +107,11 @@ jobs:
 
       - name: Type-check
         run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        # Pages fetch data in the browser and the API proxy runs per request,
+        # so the build needs neither a running API nor FLOP_API_KEY.
+        run: npm run build
