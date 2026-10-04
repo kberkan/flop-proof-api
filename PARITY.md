@@ -512,7 +512,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 402 passed, 1 xfailed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 504 passed, 1 xfailed (with the API server running on 127.0.0.1:8000).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
