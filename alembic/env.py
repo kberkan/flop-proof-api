@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -11,6 +12,13 @@ import app.models
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Same database as the API (app/database.py): FLOP_DATABASE_URL if set,
+# otherwise sqlalchemy.url from alembic.ini. "%" is escaped because the
+# config values are interpolated.
+_database_url = os.getenv("FLOP_DATABASE_URL")
+if _database_url:
+    config.set_main_option("sqlalchemy.url", _database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -134,9 +134,15 @@ python -m app.verifier /path/to/proof.json
 
 ## Tests
 
-python -m pytest -q
+scripts/run_tests.sh -q
 
-Current regression status: **681 passed** (with the API server running on 127.0.0.1:8000)
+The script creates a temporary database, starts the API server on
+127.0.0.1:8000 against it (`FLOP_DATABASE_URL`), runs pytest with the same
+environment, and removes both afterwards; extra arguments go to pytest. It
+refuses to start if 127.0.0.1:8000 is already in use. Running `pytest` without
+the script uses `./proofs.db` and may write test data to it.
+
+Current regression status: **681 passed**
 
 ## Test vectors
 

@@ -528,7 +528,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 681 passed (with the API server running on 127.0.0.1:8000).
+**Current test baseline:** 681 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
