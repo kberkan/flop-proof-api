@@ -1,35 +1,154 @@
-import copy
+import hashlib
 import json
 import os
-import subprocess
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.verifier import verify_proof_file, verify_proof_data
 
 
-PROOF_FILE = "/tmp/flop-proof.json"
+TEST_API_KEY = os.getenv("FLOP_API_KEY", "flop-dev-key-2026")
 
 
-def ensure_proof_file():
-    if os.path.exists(PROOF_FILE):
-        return
+@pytest.fixture
+def proof_file(tmp_path, monkeypatch):
+    """Export a fresh four-event proof (request.created, task.delegated,
+    result.created, artifact.created) to tmp_path and return its path.
 
-    subprocess.run(
-        ["python", "test_client.py"],
-        check=True,
-        stdout=subprocess.DEVNULL,
+    Same flow as the test_client.py script, but in-process against an
+    in-memory database, so the tests never read a proof or artifact left
+    in /tmp by an earlier run and never touch proofs.db.
+    """
+    from app import main, models  # noqa: F401  (models registers the tables)
+    from app.crypto import (
+        generate_test_keypair,
+        public_key_to_test_did,
+        sha256_json,
+        sign_message,
     )
+    from app.database import Base, get_db
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    TestSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+    def override_get_db():
+        db = TestSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    monkeypatch.setattr(main, "API_KEY", TEST_API_KEY)
+    previous = main.app.dependency_overrides.get(get_db)
+    main.app.dependency_overrides[get_db] = override_get_db
+    try:
+        client = TestClient(main.app, headers={"X-API-Key": TEST_API_KEY})
+
+        private_key, public_key = generate_test_keypair()
+        did = public_key_to_test_did(public_key)
+
+        nonce = f"verifier-nonce-{uuid.uuid4().hex}"
+        text = "proof created for test_verifier"
+        canonical = f"verifier-room|{nonce}|{text}"
+        created = client.post(
+            "/proofs",
+            json={
+                "request": {
+                    "request_id": f"verifier-request-{uuid.uuid4().hex}",
+                    "from_did": did,
+                    "text": text,
+                    "created_at": "2026-09-04T20:30:00Z",
+                    "signature": {
+                        "nonce": nonce,
+                        "sig": sign_message(private_key, canonical.encode("utf-8")),
+                        "canonical": canonical,
+                    },
+                }
+            },
+        )
+        assert created.status_code == 201, created.text
+        proof_id = created.json()["proof_id"]
+
+        def append_event(event_type, payload):
+            event_canonical = f"{proof_id}|{event_type}|{sha256_json(payload)}"
+            response = client.post(
+                f"/proofs/{proof_id}/events",
+                json={
+                    "type": event_type,
+                    "actor_did": did,
+                    "payload": payload,
+                    "signature": {
+                        "nonce": f"verifier-event-{uuid.uuid4().hex}",
+                        "sig": sign_message(private_key, event_canonical.encode("utf-8")),
+                        "canonical": event_canonical,
+                    },
+                },
+            )
+            assert response.status_code == 201, response.text
+
+        append_event(
+            "task.delegated",
+            {
+                "task_id": "verifier-task-001",
+                "instruction": "Execute for test_verifier",
+                "delegated_to": did,
+            },
+        )
+
+        result_content = "test_verifier generated result"
+        append_event(
+            "result.created",
+            {
+                "content": result_content,
+                "content_hash": "sha256:"
+                + hashlib.sha256(result_content.encode("utf-8")).hexdigest(),
+            },
+        )
+
+        artifact_path = tmp_path / "flop-artifact.txt"
+        artifact_content = b"FLOP test_verifier artifact\n"
+        artifact_path.write_bytes(artifact_content)
+        append_event(
+            "artifact.created",
+            {
+                "path": str(artifact_path),
+                "sha256": "sha256:" + hashlib.sha256(artifact_content).hexdigest(),
+            },
+        )
+
+        response = client.get(f"/proofs/{proof_id}")
+        assert response.status_code == 200, response.text
+        proof = response.json()
+        assert len(proof["events"]) == 4
+    finally:
+        if previous is None:
+            main.app.dependency_overrides.pop(get_db, None)
+        else:
+            main.app.dependency_overrides[get_db] = previous
+        engine.dispose()
+
+    path = tmp_path / "flop-proof.json"
+    path.write_text(json.dumps(proof, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
 
 
-
-def load_proof():
-    ensure_proof_file()
-    with open(PROOF_FILE, encoding="utf-8") as f:
+def load_proof(path):
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def test_valid_proof():
-    ensure_proof_file()
-    result = verify_proof_file(PROOF_FILE)
+def test_valid_proof(proof_file):
+    result = verify_proof_file(proof_file)
 
     assert result["verdict"] == "valid"
     assert result["events_checked"] == 4
@@ -44,8 +163,8 @@ def test_valid_proof():
         assert check["signature_valid"] is True
 
 
-def test_payload_tampering():
-    proof = load_proof()
+def test_payload_tampering(proof_file):
+    proof = load_proof(proof_file)
 
     for event in proof["events"]:
         if event["type"] == "task.delegated":
@@ -65,8 +184,8 @@ def test_payload_tampering():
     assert delegated["payload_hash_valid"] is False
 
 
-def test_chain_tampering():
-    proof = load_proof()
+def test_chain_tampering(proof_file):
+    proof = load_proof(proof_file)
 
     for event in proof["events"]:
         if event["type"] == "result.created":
@@ -86,8 +205,8 @@ def test_chain_tampering():
     assert result_event["chain_valid"] is False
 
 
-def test_event_reordering():
-    proof = load_proof()
+def test_event_reordering(proof_file):
+    proof = load_proof(proof_file)
 
     proof["events"][1]["sequence"] = 3
     proof["events"][2]["sequence"] = 2
@@ -102,8 +221,8 @@ def test_event_reordering():
     )
 
 
-def test_missing_proof_id():
-    proof = load_proof()
+def test_missing_proof_id(proof_file):
+    proof = load_proof(proof_file)
     proof.pop("proof_id")
 
     result = verify_proof_data(proof)
@@ -112,8 +231,8 @@ def test_missing_proof_id():
     assert result["error"] == "Missing proof_id"
 
 
-def test_invalid_events_structure():
-    proof = load_proof()
+def test_invalid_events_structure(proof_file):
+    proof = load_proof(proof_file)
     proof["events"] = "invalid"
 
     result = verify_proof_data(proof)
