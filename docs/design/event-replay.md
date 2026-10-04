@@ -157,10 +157,14 @@ New canonical: `proof_id|type|payload_hash|nonce`, plus a domain tag (§3.1).
 Without a tag, the new 4-part canonical would still parse as a request
 canonical, because `verify_floop_signature` splits at most twice and puts the
 rest in `text` (`app/crypto.py:981`). Proposed:
-`FLOP/EVENT/v2|proof_id|type|payload_hash|nonce`. `verify_floop_signature`
-should then reject a request canonical whose room starts with `FLOP/`, or
-requests should get their own tag (`FLOP/REQUEST/v2|room|nonce|text`). The
-second also changes the request wire format and is a separate decision (§6).
+`FLOP/EVENT/v2|proof_id|type|payload_hash|nonce`. Requests and events then
+have to be kept apart in one of two ways:
+
+- `verify_floop_signature` rejects a request canonical whose room starts with
+  `FLOP/`. **Considered, not chosen (see D-R2).**
+- Requests get their own tag (`FLOP/REQUEST/v2|room|nonce|text`). This also
+  changes the request wire format. **Chosen (D-R2)**, with the tag version
+  equal to the proof version: `FLOP/REQUEST/v3` and `FLOP/EVENT/v3`.
 
 ### 3.2 API and verifier
 
@@ -192,12 +196,67 @@ nonce" keeps one meaning per version.
 
 `append_signed_event` (`flop_proof_sdk/client.py:154-182`) already takes a
 `nonce` (`:161`); the change is to include it (and the domain tag) in the
-canonical at `:164`. Callers keep the same signature. An old SDK talking to a
-new API gets 401 on version-3 proofs ("Event canonical message mismatch",
-`app/main.py:710`). `client.py` at the repo root is a copy and needs the same
-change, or should be removed (`event-authorization.md` §10).
+canonical at `:164`. `create_signed_proof` (`:124-152`) adds the request tag
+to the canonical at `:134` (D-R2). Callers keep the same signature.
 
-### 3.5 Tests that build the event canonical by hand
+An old SDK is rejected at `POST /proofs`: its request has no tag, so it gets
+401 before any proof is created (D-R4). It therefore never holds a version-3
+proof to append to. The event-stage failure described in an earlier draft (an
+old SDK getting 401 "Event canonical message mismatch", `app/main.py:710`, on
+a version-3 proof it had just created) no longer occurs under D-R4. That 401
+remains only for an old-format event sent to a version-3 proof created by a
+new client.
+
+`client.py` at the repo root is a copy of the SDK and is removed (D-R7).
+
+### 3.5 Places to change
+
+Every place that builds or checks a request or event canonical, plus the
+other places D-R1 to D-R7 change. Line numbers in this section are at commit
+`586a941`, not at the document baseline.
+
+**Application code and SDK**
+
+| File:line | Today | Change | Decision |
+|---|---|---|---|
+| `app/crypto.py:878-883` | `canonical_signed_message` builds `room\|nonce\|text` | add the request tag | D-R2 |
+| `app/crypto.py:975-982` | `PROOF_ID_PATTERN`, `is_proof_id` (§1.2 minimal fix) | still used for v1/v2 request binding in the verifier; redundant for v3 requests | D-R2 |
+| `app/crypto.py:985-1025` | `verify_floop_signature` splits `room\|nonce\|text` (`:992`) and rejects a `proof_` room (`:1006`) | require `FLOP/REQUEST/v3`, reject an untagged request, reject `\|` in room and nonce | D-R2, D-R3, D-R4 |
+| `app/schemas.py:7-12`, `:31-36`, `:39-45` | `SignatureSchema.nonce`, `EventSignatureSchema.nonce`, `EventCreate.type`: only `min_length=1` | one possible place to reject `\|` in nonce and type (the other is the canonical check) | D-R3 |
+| `app/main.py:539-552` | `create_proof` checks the request signature (401) | untagged request rejected here, before the proof row is written | D-R4 |
+| `app/main.py:601` | `version="2"` | `version="3"` | D-R1 |
+| `app/main.py:701-710` | builds `proof_id\|type\|payload_hash` and compares (401) | v3: tagged canonical with nonce; v1/v2 proofs keep the old canonical | D-R2 |
+| `app/main.py:714-725` | verifies the signature over the submitted canonical | unchanged | — |
+| `app/main.py:762-772` | rejects a nonce already used in the proof (409) | add Option B for v1/v2 proofs: reject a repeated (canonical, signature) pair | D-R5 |
+| `app/main.py:837-858` | `GET /proofs/{id}` export without `nonce` | add `nonce` | D-R6 |
+| `app/main.py:880-905` | `/verify` event list without `nonce`; calls `verify_proof_events(proof_id, events)` | add `nonce`; pass the proof version | D-R1, D-R6 |
+| `app/events.py:35`, `:39-40` | `create_event` defaults to `nonce=""` (so `request.created` rows store an empty nonce) and builds the old canonical when none is given | default canonical for v3 or require one; decide which nonce is exported for `request.created` (stored row is empty, the request nonce is in `payload.signature.nonce`) | D-R2, D-R6 |
+| `app/verification_core.py:15-48` | `_request_binding_ok` parses `room\|nonce\|text` | v3: parse the tagged form; reject `\|` in room and nonce | D-R2, D-R3 |
+| `app/verification_core.py:53-56` | `verify_proof_events(proof_id, events)` has no version | take the proof version and pick the canonical rules by it | D-R1 |
+| `app/verification_core.py:117-136` | `request.created`: canonical equals the stored request canonical, binding check | v3: tagged request canonical | D-R2 |
+| `app/verification_core.py:137-142` | non-request events: recomputes `proof_id\|type\|payload_hash` | v3: tagged canonical with the exported nonce | D-R2 |
+| `app/verification_core.py:75-208` (event loop) | no nonce or repeat check | v3: nonce unique in the proof; v1/v2: Option B | D-R5, D-R6 |
+| `app/verifier.py:13-33` | `verify_proof_data` passes only `proof_id` and `events` | pass `version` from the exported proof | D-R1 |
+| `flop_proof_sdk/client.py:124-152` | `create_signed_proof`, canonical at `:134` | request tag | D-R2, D-R7 |
+| `flop_proof_sdk/client.py:154-182` | `append_signed_event`, canonical at `:164`, nonce unsigned at `:176` | event tag and signed nonce | D-R2, D-R7 |
+| `pyproject.toml:7` | SDK version `0.2.0` | bump | D-R7 |
+| `client.py` (root) | copy of the SDK; canonicals at `:134`, `:164` | remove | D-R7 |
+
+**Tests that build a request canonical by hand** (all need the request tag, D-R2)
+
+| File:line | Use |
+|---|---|
+| `test_api_contract.py:20` | contract tests' signed request |
+| `test_client.py:39` | E2E script's request |
+| `test_event_replay.py:25` | request for the replay tests (room is the `request_id`) |
+| `test_idempotency.py:16` | idempotent `POST /proofs` |
+| `test_lifecycle.py:31` | `create_signed_proof` helper (`:26`) |
+| `test_security_regression.py:63-80` | `make_signed_request` helper (canonical at `:66`) |
+| `test_security_regression.py:652-804` | §1.2 tests: `_victim_event_signature` (`:652`), `_request_from_event_signature` (`:662`), tests at `:680`, `:692`, `:733`, `:742`, `:790`. Under v3 they need tagged messages; the event-as-request case then fails on the tag. |
+| `test_verifier.py:62` | `proof_file` fixture's request |
+| `test_verifier.py:263` | `_build_signed_result_event` request |
+
+**Tests that build an event canonical by hand** (v3 tag and nonce, D-R2)
 
 | File:line | Use |
 |---|---|
@@ -206,12 +265,17 @@ change, or should be removed (`event-authorization.md` §10).
 | `test_event_replay.py:64` | exact replay (same nonce) → 409 |
 | `test_lifecycle.py:68` | lifecycle appends |
 | `test_lifecycle.py:255` | direct `create_event` with a non-standard canonical (concurrency test; not verified) |
-| `test_security_regression.py:172`, `:202` | completed proof rejects events |
+| `test_security_regression.py:172`, `:201-202` | completed proof rejects events |
 | `test_security_regression.py:299` | `signed_event` helper used by the authorization tests |
-| `test_verifier.py:171` | `_build_signed_result_event` chain helper |
+| `test_verifier.py:290` | `_build_signed_result_event` chain helper |
 
-Tests that use the SDK (`test_client_signed.py`, `test_validator_api.py`)
-change with the SDK.
+`test_api_contract.py:127` and `test_client_errors.py:53` send the fixed
+canonical `"invalid"`; they stay invalid under v3 and need no change.
+
+**Tests that import the root `client.py`** (move to `flop_proof_sdk`, D-R7):
+`test_client.py:11`, `test_client_errors.py:4`, `test_validator_api.py:737`,
+`:921`, `:1077`, `:1123`, `:1184`, `:1333`. `test_client_signed.py:10` already
+uses `flop_proof_sdk` and changes with the SDK.
 
 ### 3.6 Dashboard
 
