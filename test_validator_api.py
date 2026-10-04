@@ -734,7 +734,7 @@ def test_proof_validator_attestation_throughput_tripwire_rejects_bound_result(mo
         public_key_to_test_did,
         sign_validator_attestation,
     )
-    from client import FlopProofClient
+    from flop_proof_sdk import FlopProofClient
 
     api_client = FlopProofClient(
         "http://127.0.0.1:8000",
@@ -918,7 +918,7 @@ def test_proof_validator_attestation_accepts_bound_result(monkeypatch):
 
     from app import main
     from app.crypto import compute_task_hash, compute_report_data, generate_test_keypair, public_key_to_test_did, sign_validator_attestation
-    from client import FlopProofClient
+    from flop_proof_sdk import FlopProofClient
 
     api_client = FlopProofClient(
         "http://127.0.0.1:8000",
@@ -1074,7 +1074,7 @@ def test_proof_validator_attestation_rejects_missing_result_created(monkeypatch)
     from app import main
     import uuid
 
-    api_client = __import__("client", fromlist=["FlopProofClient"]).FlopProofClient(
+    api_client = __import__("flop_proof_sdk", fromlist=["FlopProofClient"]).FlopProofClient(
         "http://127.0.0.1:8000",
         api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
     )
@@ -1120,7 +1120,7 @@ def test_proof_validator_attestation_rejects_incomplete_result(monkeypatch):
     from app import main
     import uuid
 
-    api_client = __import__("client", fromlist=["FlopProofClient"]).FlopProofClient(
+    api_client = __import__("flop_proof_sdk", fromlist=["FlopProofClient"]).FlopProofClient(
         "http://127.0.0.1:8000",
         api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
     )
@@ -1181,7 +1181,7 @@ def test_proof_validator_attestation_rejects_result_attestation_mismatch(monkeyp
         sign_validator_attestation,
     )
 
-    api_client = __import__("client", fromlist=["FlopProofClient"]).FlopProofClient(
+    api_client = __import__("flop_proof_sdk", fromlist=["FlopProofClient"]).FlopProofClient(
         "http://127.0.0.1:8000",
         api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
     )
@@ -1330,7 +1330,7 @@ def test_proof_validator_attestation_replay_survives_memory_reset(monkeypatch):
         public_key_to_test_did,
         sign_validator_attestation,
     )
-    from client import FlopProofClient
+    from flop_proof_sdk import FlopProofClient
 
     api_client = FlopProofClient(
         "http://127.0.0.1:8000",

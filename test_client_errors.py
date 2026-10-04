@@ -1,7 +1,7 @@
 import pytest
 import os
 
-from client import (
+from flop_proof_sdk import (
     FlopProofClient,
     FlopProofError,
     FlopProofHTTPError,

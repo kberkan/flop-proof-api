@@ -2,6 +2,14 @@ import json
 from typing import Any
 
 from .authorization import authorize_event, check_single_result_created
+from .canonical import (
+    CURRENT_PROOF_VERSION,
+    LEGACY_PROOF_VERSIONS,
+    TAG_PREFIX,
+    build_event_canonical_v3,
+    parse_event_canonical_v3,
+    parse_request_canonical_v3,
+)
 from .crypto import (
     compute_task_hash,
     hash_event_record,
@@ -50,13 +58,71 @@ def _request_binding_ok(
     )
 
 
+def _request_binding_ok_v3(
+    canonical: Any,
+    signature: Any,
+    actor_did: Any,
+    payload: Any,
+) -> bool:
+    """Version-3 request.created: the tagged canonical parses
+    (app/canonical.py) and its nonce and text are the stored request's, and
+    the stored signature and actor are the request's."""
+    if not isinstance(payload, dict):
+        return False
+    request_signature = payload.get("signature")
+    if not isinstance(request_signature, dict):
+        return False
+    try:
+        _, nonce, text = parse_request_canonical_v3(canonical)
+    except ValueError:
+        return False
+
+    return (
+        nonce == request_signature.get("nonce")
+        and text == payload.get("text")
+        and signature == request_signature.get("sig")
+        and actor_did == payload.get("from_did")
+    )
+
+
+def _signed_nonce_v3(event_type: Any, canonical: Any) -> str | None:
+    """The nonce inside a version-3 canonical, or None if it does not parse."""
+    try:
+        if event_type == "request.created":
+            return parse_request_canonical_v3(canonical)[1]
+        return parse_event_canonical_v3(canonical)[3]
+    except ValueError:
+        return None
+
+
 def verify_proof_events(
     proof_id: str,
     events: list[dict[str, Any]],
+    version: Any,
 ) -> dict[str, Any]:
+    """`version` is the proof's version. It picks the canonical rules:
+    "3" takes only the tagged formats; "1"/"2" take only the untagged ones,
+    with Option B replay detection (docs/design/event-replay.md D-R5, D-R11,
+    D-R12). A missing or unknown version is not guessed: the proof is invalid.
+    """
+    is_v3 = version == CURRENT_PROOF_VERSION
+
+    if not is_v3 and version not in LEGACY_PROOF_VERSIONS:
+        return {
+            "proof_id": proof_id,
+            "proof_version": version,
+            "verdict": "invalid",
+            "reason": "Missing or unsupported proof version.",
+            "events_checked": 0,
+            "result_hash_valid": None,
+            "artifact_hash_valid": None,
+            "checks": [],
+        }
+
     if not events:
         return {
             "proof_id": proof_id,
+            "proof_version": version,
             "verdict": "invalid",
             "reason": "Proof contains no events.",
             "events_checked": 0,
@@ -72,6 +138,10 @@ def verify_proof_events(
     # Only these may grant authority to later events (authorize_event
     # precondition; docs/design/event-authorization.md D-A10).
     authorization_prior: list[dict[str, Any]] = []
+    # Replay detection: signed nonces seen so far (v3), or (canonical,
+    # signature) pairs seen so far (v1/v2, Option B).
+    seen_nonces: set[str] = set()
+    seen_pairs: set[tuple[Any, Any]] = set()
 
     for event in events:
         event_id = event.get("event_id")
@@ -131,15 +201,53 @@ def verify_proof_events(
                 bool(expected_canonical)
                 and canonical == expected_canonical
             )
-            request_binding_ok = _request_binding_ok(
-                canonical, signature, actor_did, payload
-            )
+            request_binding_ok = (
+                _request_binding_ok_v3 if is_v3 else _request_binding_ok
+            )(canonical, signature, actor_did, payload)
         else:
             request_binding_ok = None
-            expected_canonical = (
-                f"{proof_id}|{event_type}|{payload_hash}"
+            if is_v3:
+                try:
+                    expected_canonical = build_event_canonical_v3(
+                        proof_id, event_type, payload_hash, event.get("nonce")
+                    )
+                except ValueError:
+                    expected_canonical = None
+            else:
+                expected_canonical = (
+                    f"{proof_id}|{event_type}|{payload_hash}"
+                )
+            canonical_ok = (
+                expected_canonical is not None
+                and canonical == expected_canonical
             )
-            canonical_ok = canonical == expected_canonical
+
+        # format_valid (D-R11, D-R12): the canonical is in this proof
+        # version's format. v3: it parses as a tagged message of its kind and
+        # the exported nonce is the signed one. v1/v2: it is not tagged.
+        # replay_valid: v3, the signed nonce is new in this proof; v1/v2, the
+        # (canonical, signature) pair is new in this proof (Option B, D-R5).
+        if is_v3:
+            signed_nonce = _signed_nonce_v3(event_type, canonical)
+            format_ok = (
+                signed_nonce is not None
+                and event.get("nonce") == signed_nonce
+            )
+            replay_ok = signed_nonce is None or signed_nonce not in seen_nonces
+            if signed_nonce is not None:
+                seen_nonces.add(signed_nonce)
+        else:
+            format_ok = (
+                isinstance(canonical, str)
+                and not canonical.startswith(TAG_PREFIX)
+            )
+            pair = (canonical, signature)
+            try:
+                replay_ok = pair not in seen_pairs
+                seen_pairs.add(pair)
+            except TypeError:
+                # Unhashable values: the canonical or signature check fails.
+                replay_ok = True
 
         try:
             signature_ok = verify_canonical_signature(
@@ -182,6 +290,8 @@ def verify_proof_events(
                 "signature_valid": signature_ok,
                 # request.created only; None for other event types.
                 "request_binding_valid": request_binding_ok,
+                "format_valid": format_ok,
+                "replay_valid": replay_ok,
                 "actor_did": actor_did,
                 "role": role,
                 "actor_authorized": authorization_reason is None,
@@ -194,6 +304,8 @@ def verify_proof_events(
             and canonical_ok
             and payload_hash_ok
             and request_binding_ok is not False
+            and format_ok
+            and replay_ok
         ):
             authorization_prior.append(
                 {
@@ -214,6 +326,8 @@ def verify_proof_events(
         and check["canonical_valid"]
         and check["signature_valid"]
         and check["request_binding_valid"] is not False
+        and check["format_valid"]
+        and check["replay_valid"]
         and check["actor_authorized"]
         for check in checks
     )
@@ -316,6 +430,7 @@ def verify_proof_events(
 
     return {
         "proof_id": proof_id,
+        "proof_version": version,
         "verdict": "valid" if all_events_valid else "invalid",
         "events_checked": len(events),
         "result_hash_valid": result_hash_valid,

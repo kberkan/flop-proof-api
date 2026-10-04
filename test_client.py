@@ -8,7 +8,11 @@ from app.crypto import (
     public_key_to_test_did,
     sign_message,
 )
-from client import FlopProofClient
+from flop_proof_sdk import (
+    FlopProofClient,
+    build_event_canonical_v3,
+    build_request_canonical_v3,
+)
 
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -36,7 +40,7 @@ def main():
 
     nonce = f"client-sdk-nonce-{uuid.uuid4().hex}"
     text = "proof created through Python SDK"
-    canonical = f"client-sdk|{nonce}|{text}"
+    canonical = build_request_canonical_v3("client-sdk", nonce, text)
     signature = sign_message(
         private_key,
         canonical.encode("utf-8"),
@@ -61,8 +65,8 @@ def main():
 
     def append_event(event_type, payload):
         event_nonce = f"client-sdk-event-{uuid.uuid4().hex}"
-        event_canonical = (
-            f"{proof_id}|{event_type}|{payload_hash(payload)}"
+        event_canonical = build_event_canonical_v3(
+            proof_id, event_type, payload_hash(payload), event_nonce
         )
         event_signature = sign_message(
             private_key,

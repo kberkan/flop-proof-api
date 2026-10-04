@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0] - 2026-10-04
+
+### Changed
+- Proof requests and events are signed as domain-tagged version-3 messages:
+  `FLOP/REQUEST/v3|room|nonce|text` and
+  `FLOP/EVENT/v3|proof_id|type|payload_hash|nonce`. New proofs are version
+  `"3"`; untagged proof requests are rejected (401).
+- SDK `create_signed_proof` and `append_signed_event` sign the version-3
+  formats; the SDK exports the canonical builders and parsers.
+- `GET /proofs/{proof_id}` and `/verify` export each event's `nonce`.
+- The offline verifier (`python -m app.verifier`) reads the proof `version`
+  field to choose the canonical rules and treats an export without `version`
+  (or with an unknown one) as `invalid`. `GET /proofs/{proof_id}` has included
+  `version` since 0.1.0, so its exports are unaffected; a proof JSON file
+  without `version` (for example one built or edited by hand) must be
+  re-exported from `GET /proofs/{proof_id}`.
+
+### Removed
+- Root `client.py` (an old copy of the SDK); use `flop_proof_sdk`.
+
+### Security
+- Signed events can no longer be replayed with a new nonce (version 3), and
+  version 1/2 proofs reject a repeated (canonical, signature) pair.
+- The verifier reports `format_valid` and `replay_valid` per event and rejects
+  version-3 messages in version 1/2 proofs.
+
 ## [0.2.0] - 2026-09-05
 
 ### Added

@@ -979,7 +979,8 @@ PROOF_ID_PATTERN = re.compile(r"^proof_[0-9a-f]{32}$")
 
 
 def is_proof_id(value: str) -> bool:
-    return PROOF_ID_PATTERN.match(value) is not None
+    # fullmatch: with match, "$" also accepts a trailing newline (D-R9).
+    return isinstance(value, str) and PROOF_ID_PATTERN.fullmatch(value) is not None
 
 
 def verify_floop_signature(
@@ -989,6 +990,13 @@ def verify_floop_signature(
     canonical: str,
     signature: str,
 ) -> bool:
+    """v1/v2 request signature (room|nonce|text). POST /proofs accepts only
+    version-3 requests (app/canonical.py, D-R4); this is the legacy format."""
+    # D-R11: a tagged (version-3) message is never a v1/v2 request.
+    # Same value as app/canonical.py TAG_PREFIX (that module imports this one).
+    if canonical.startswith("FLOP/"):
+        return False
+
     expected_parts = canonical.split("|", 2)
 
     if len(expected_parts) != 3:

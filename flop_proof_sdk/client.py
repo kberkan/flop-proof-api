@@ -9,6 +9,8 @@ import json
 import base58
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from .canonical import build_event_canonical_v3, build_request_canonical_v3
+
 
 ED25519_PUB_MULTICODEC = bytes([0xed, 0x01])
 
@@ -131,7 +133,8 @@ class FlopProofClient:
         request_id: str,
         created_at: str,
     ) -> dict[str, Any]:
-        canonical = f"{room}|{nonce}|{text}"
+        # Version-3 request format; raises ValueError for an invalid field.
+        canonical = build_request_canonical_v3(room, nonce, text)
         signature = sign_message(
             private_key,
             canonical.encode("utf-8"),
@@ -161,7 +164,9 @@ class FlopProofClient:
         nonce: str,
     ) -> dict[str, Any]:
         payload_hash = sha256_json(payload)
-        canonical = f"{proof_id}|{event_type}|{payload_hash}"
+        # Version-3 event format: the nonce is signed. Version-3 proofs only;
+        # the API rejects new events in this format on v1/v2 proofs (D-R12).
+        canonical = build_event_canonical_v3(proof_id, event_type, payload_hash, nonce)
 
         signature = sign_message(
             private_key,

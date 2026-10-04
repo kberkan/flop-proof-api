@@ -22,10 +22,17 @@ from .crypto import (
     sha256_bytes,
     sha256_json,
     verify_canonical_signature,
-    verify_floop_signature,
     verify_and_accept_validator_attestation_bundle_for_result,
     verify_validator_attestation_bundle_for_result,
     validate_gn_latency_throughput_tripwire,
+)
+from .canonical import (
+    CURRENT_PROOF_VERSION,
+    LEGACY_PROOF_VERSIONS,
+    REQUEST_TAG,
+    TAG_PREFIX,
+    build_event_canonical_v3,
+    parse_request_canonical_v3,
 )
 from .replay import claim_processed_task
 from .database import Base, engine, get_db
@@ -534,14 +541,29 @@ def create_proof(
     _: bool = Depends(require_api_key),
 ):
     signed_request = request.request
+    canonical = signed_request.signature.canonical
+
+    # Only version-3 requests are accepted (D-R4): an untagged request is
+    # rejected here, before any proof is written. 401 like every other
+    # request-signature failure; the detail names the expected format so an
+    # old client can tell it must upgrade (the format is public).
+    try:
+        _, canonical_nonce, canonical_text = parse_request_canonical_v3(canonical)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid request canonical, expected {REQUEST_TAG}|room|nonce|text ({exc})",
+        )
 
     try:
-        valid = verify_floop_signature(
-            did=signed_request.from_did,
-            nonce=signed_request.signature.nonce,
-            text=signed_request.text,
-            canonical=signed_request.signature.canonical,
-            signature=signed_request.signature.sig,
+        valid = (
+            canonical_nonce == signed_request.signature.nonce
+            and canonical_text == signed_request.text
+            and verify_canonical_signature(
+                did=signed_request.from_did,
+                canonical=canonical,
+                signature=signed_request.signature.sig,
+            )
         )
     except ValueError:
         valid = False
@@ -598,7 +620,7 @@ def create_proof(
     proof = Proof(
         proof_id=proof_id,
         request_id=signed_request.request_id,
-        version="2",
+        version=CURRENT_PROOF_VERSION,
         status="pending",
         created_at=now,
         updated_at=now,
@@ -616,6 +638,9 @@ def create_proof(
         payload=request_payload,
         canonical=signed_request.signature.canonical,
         signature=signed_request.signature.sig,
+        # Stored so the export and the per-proof nonce check (D-R6) see the
+        # request's signed nonce; v1/v2 request rows hold "".
+        nonce=signed_request.signature.nonce,
     )
 
     try:
@@ -700,11 +725,42 @@ def append_event(
 
     payload_hash = sha256_json(event.payload)
 
-    expected_canonical = (
-        f"{proof_id}|{event.type}|{payload_hash}"
-    )
+    # D-R12: a chain never mixes formats. Version-3 proofs take only the
+    # tagged event canonical, whose signed nonce must be the submitted one;
+    # v1/v2 proofs take only the old one.
+    if proof.version == CURRENT_PROOF_VERSION:
+        try:
+            expected_canonical = build_event_canonical_v3(
+                proof_id,
+                event.type,
+                payload_hash,
+                event.signature.nonce,
+            )
+        except ValueError as exc:
+            # type or nonce breaks D-R3/D-R10; the request is malformed.
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid event field ({exc})",
+            )
+    elif proof.version in LEGACY_PROOF_VERSIONS:
+        expected_canonical = (
+            f"{proof_id}|{event.type}|{payload_hash}"
+        )
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Unsupported proof version {proof.version!r}",
+        )
 
-    if event.signature.canonical != expected_canonical:
+    # D-R11: a tagged message is never a v1/v2 event. The equality check
+    # below already implies it; kept explicit for the legacy path.
+    if (
+        event.signature.canonical != expected_canonical
+        or (
+            proof.version in LEGACY_PROOF_VERSIONS
+            and event.signature.canonical.startswith(TAG_PREFIX)
+        )
+    ):
         raise HTTPException(
             status_code=401,
             detail="Event canonical message mismatch",
@@ -769,6 +825,20 @@ def append_event(
         raise HTTPException(
             status_code=409,
             detail="event nonce already used for this proof",
+        )
+
+    # Option B for v1/v2 proofs (D-R5): their nonce is not signed, so a
+    # replay with a new nonce is caught as a repeated (canonical, signature)
+    # pair. In version-3 proofs a copy carries the same signed nonce and is
+    # caught above.
+    if proof.version in LEGACY_PROOF_VERSIONS and any(
+        stored.canonical == event.signature.canonical
+        and stored.signature == event.signature.sig
+        for stored in chain
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="event already recorded in this proof",
         )
 
     single_result_error = check_single_result_created(prior_events, event.type)
@@ -850,6 +920,7 @@ def get_proof(
                 "payload": json.loads(event.payload_json),
                 "canonical": event.canonical,
                 "signature": event.signature,
+                "nonce": event.nonce,
                 "created_at": event.created_at,
                 "sequence": event.sequence,
                 "previous_event_hash": event.previous_event_hash,
@@ -892,6 +963,7 @@ def verify_proof(
             "payload_hash": event.payload_hash,
             "canonical": event.canonical,
             "signature": event.signature,
+            "nonce": event.nonce,
             "created_at": event.created_at.isoformat(),
             "sequence": event.sequence,
             "previous_event_hash": event.previous_event_hash,
@@ -902,6 +974,7 @@ def verify_proof(
     verification = verify_proof_events(
         proof_id=proof_id,
         events=events,
+        version=proof.version,
     )
 
     verification["evidence"] = {

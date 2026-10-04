@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.canonical import build_event_canonical_v3, build_request_canonical_v3
 from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
 
@@ -22,7 +23,7 @@ def test_exact_event_replay_is_rejected():
     request_nonce = f"replay-request-nonce-{uuid.uuid4().hex}"
     created_at = datetime.now(timezone.utc).isoformat()
 
-    request_canonical = f"{request_id}|{request_nonce}|{text}"
+    request_canonical = build_request_canonical_v3(request_id, request_nonce, text)
     request_signature = sign_message(
         private_key,
         request_canonical.encode(),
@@ -61,7 +62,7 @@ def test_exact_event_replay_is_rejected():
         ).encode()
     ).hexdigest()
 
-    canonical = f"{proof_id}|{event_type}|{payload_hash}"
+    canonical = build_event_canonical_v3(proof_id, event_type, payload_hash, nonce)
 
     event_signature = sign_message(
         private_key,

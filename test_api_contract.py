@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 import os
 
 from app.main import app
+from app.canonical import build_request_canonical_v3
 from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
 
@@ -17,7 +18,7 @@ def make_signed_request():
 
     nonce = "contract-test-nonce"
     text = "contract test request"
-    canonical = f"contract-test|{nonce}|{text}"
+    canonical = build_request_canonical_v3("contract-test", nonce, text)
     signature = sign_message(private_key, canonical.encode("utf-8"))
 
     return {

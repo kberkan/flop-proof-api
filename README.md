@@ -18,7 +18,7 @@ Evidence accepted or validated by the FLOP Proof API does not, by itself, provid
 - STARK proof execution or verification merely because STARK evidence was accepted
 - Runtime settlement or execution verification merely because validator attestations were accepted
 - Execution verification, settlement, or credit merely because `accepted=true`
-- Event authorship beyond the proof's own delegation rule: the API accepts an event only from the proof's creator or from a DID the creator delegated to in a signed `task.delegated` event, and `/verify` checks the same rule. It does not offer revocation (a delegation cannot be withdrawn), sub-delegation, or protection against replay: a signed event can be appended again with a new nonce (see `PARITY.md`, Known Security Gaps)
+- Event authorship beyond the proof's own delegation rule: the API accepts an event only from the proof's creator or from a DID the creator delegated to in a signed `task.delegated` event, and `/verify` checks the same rule. It does not offer revocation (a delegation cannot be withdrawn) or sub-delegation. Replay of a signed event is rejected within its own proof (version-3 proofs sign the nonce; version 1/2 proofs reject a repeated signature, see `docs/design/event-replay.md`); this is API-side protection, not FLOP runtime ProcessedTasks state
 
 **Test/parity boundary:** `IMPLEMENTED (internal-test-verified)` describes behavior validated by the API's own test suite; it does not mean independently verified byte-level parity with the FLOP runtime. External parity status is classified separately in `PARITY.md`.
 
@@ -96,7 +96,7 @@ POST /validator-attestations/accept
 
 Install the wheel:
 
-pip install flop_proof_sdk-0.2.0-py3-none-any.whl
+pip install dist/flop_proof_sdk-0.3.0-py3-none-any.whl
 
 Basic usage:
 
@@ -110,9 +110,19 @@ print(client.health())
 
 client.create_signed_proof(...)
 
+The SDK signs the version-3 request message `FLOP/REQUEST/v3|room|nonce|text`.
+`POST /proofs` accepts only this format and creates version `"3"` proofs.
+
 ## Signed event
 
 client.append_signed_event(...)
+
+The SDK signs the version-3 event message
+`FLOP/EVENT/v3|proof_id|type|payload_hash|nonce`, so the nonce is signed.
+`room`, `nonce` and `type` must not contain `|` or control characters; `text`
+is free. Proofs created before version 3 keep the old formats
+(`room|nonce|text`, `proof_id|type|payload_hash`). SDK 0.3.0 signs only the
+version-3 formats. See `docs/design/event-replay.md`.
 
 ## Verify
 
@@ -126,7 +136,7 @@ python -m app.verifier /path/to/proof.json
 
 python -m pytest -q
 
-Current regression status: **504 passed, 1 xfailed** (with the API server running on 127.0.0.1:8000)
+Current regression status: **681 passed** (with the API server running on 127.0.0.1:8000)
 
 ## Test vectors
 
@@ -183,6 +193,6 @@ These boundaries are tracked in `PARITY.md`.
 
 ## Package
 
-Version: 0.2.0
+Version: 0.3.0
 
 Build with: python -m build

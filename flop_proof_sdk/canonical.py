@@ -1,54 +1,29 @@
-"""Version-3 signed message formats (docs/design/event-replay.md, D-R2, D-R3,
-D-R10).
+"""Version-3 signed message formats, SDK copy.
 
     request: FLOP/REQUEST/v3|room|nonce|text
     event:   FLOP/EVENT/v3|proof_id|type|payload_hash|nonce
 
-Pure functions: no database, network or global state. Used by the API for
-version-3 proofs and by the verifier; the v1/v2 formats (app/crypto.py
-canonical_signed_message, f"{proof_id}|{type}|{payload_hash}") are unchanged.
-flop_proof_sdk/canonical.py is a copy that must give the same results
-(test_sdk_canonical_v3.py).
+A copy of the API's app/canonical.py: the SDK is installed on its own and
+cannot import the API package. test_sdk_canonical_v3.py checks that both give
+the same canonical, or the same rejection message, for the shared vectors in
+tests/fixtures/canonical_v3_vectors.json and for seeded random inputs.
 
-Every field before the last is free of "|", so splitting at "|" gives back the
-fields and different field tuples never give the same message (D-R3). In a
-request, text is the last field and may contain "|". In an event every field is
-free of "|": proof_id and payload_hash by their format, type and nonce by D-R3.
-
-Rules the design document does not state, chosen here:
-
-- Empty fields are rejected. Today POST /proofs rejects an empty text
-  (app/schemas.py, min_length=1) and verify_floop_signature an empty room.
-  Whitespace-only values are accepted, as they are today.
-- A request room matching the proof_id pattern is rejected. The tag already
-  keeps event and request messages apart; the document calls the v1/v2 rule
-  redundant for v3 but does not say it is dropped, so it is kept.
-- payload_hash must be 64 lowercase hex characters, the format sha256_json
-  produces and the only format in proofs.db today; no "sha256:" prefix.
-- Patterns are applied with fullmatch (D-R9): in Python "$" also matches
-  before a trailing newline.
-
-D-R10: room, nonce and type must not contain control characters
-(\x00-\x1f, \x7f). text may contain them. Unicode is allowed everywhere.
+Rules (docs/design/event-replay.md, D-R2, D-R3, D-R9, D-R10): room, nonce and
+type are non-empty and contain neither "|" nor control characters; text is
+non-empty and free; proof_id matches the API's proof_id pattern; payload_hash
+is 64 lowercase hex characters; a room must not be a proof_id; the tag must
+match exactly. Errors are ValueError.
 """
 
 import re
-
-from .crypto import PROOF_ID_PATTERN
 
 
 REQUEST_TAG = "FLOP/REQUEST/v3"
 EVENT_TAG = "FLOP/EVENT/v3"
 SEPARATOR = "|"
-# New proofs are version "3" and use these formats; the tag version equals the
-# proof version (D-R1, D-R2). v1/v2 proofs keep the untagged formats (D-R5).
-CURRENT_PROOF_VERSION = "3"
-LEGACY_PROOF_VERSIONS = frozenset({"1", "2"})
 
-# Every tagged message starts with this. The v1/v2 verification path rejects
-# any canonical that does (D-R11).
-TAG_PREFIX = "FLOP/"
-
+# Same pattern as app/crypto.py PROOF_ID_PATTERN; used with fullmatch (D-R9).
+PROOF_ID_PATTERN = re.compile(r"^proof_[0-9a-f]{32}$")
 PAYLOAD_HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 

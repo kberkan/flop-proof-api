@@ -28,9 +28,12 @@ def verify_proof_data(proof: dict[str, Any]) -> dict[str, Any]:
             "error": "Invalid events",
         }
 
+    # A missing version is passed on as None and makes the proof invalid;
+    # the verifier does not guess which canonical rules apply.
     return verify_proof_events(
         proof_id=proof_id,
         events=events,
+        version=proof.get("version"),
     )
 
 def verify_proof_file(path: str | Path) -> dict[str, Any]:
@@ -75,6 +78,8 @@ def main() -> int:
                 "payload_hash_valid",
                 "canonical_valid",
                 "signature_valid",
+                "format_valid",
+                "replay_valid",
             )
         )
         mark = "✓" if status else "✗"
@@ -88,6 +93,8 @@ def main() -> int:
         ("payload hashes", "payload_hash_valid"),
         ("canonical messages", "canonical_valid"),
         ("signatures", "signature_valid"),
+        ("message format", "format_valid"),
+        ("no replayed events", "replay_valid"),
     ]
 
     for label, key in checks:

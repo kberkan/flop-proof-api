@@ -1,4 +1,5 @@
-"""Unit tests for app/canonical.py (docs/design/event-replay.md, D-R2, D-R3).
+"""Unit tests for app/canonical.py (docs/design/event-replay.md, D-R2, D-R3,
+D-R10).
 
 Pure: no database, no HTTP. Random cases use a fixed seed, so every run checks
 the same inputs.
@@ -59,7 +60,8 @@ TEXTS = [
 
 @pytest.mark.parametrize("text", TEXTS)
 def test_request_round_trip(text):
-    fields = ("room-ü 1", "nonce\n2", text)
+    # text may hold "|" and control characters; room and nonce may not (D-R10).
+    fields = ("room-ü 1", "nonce 2", text)
     assert parse_request_canonical_v3(build_request_canonical_v3(*fields)) == fields
 
 
@@ -69,7 +71,7 @@ def test_request_round_trip(text):
         ("result.created", "n"),
         ("task.delegated", "nonce with spaces"),
         ("custom.ünïcode", "日本"),
-        ("x", "line\nbreak"),
+        ("x", "nonce-ü"),
     ],
 )
 def test_event_round_trip(event_type, nonce):
@@ -258,6 +260,39 @@ def test_non_string_canonical_is_rejected(value):
         parse_event_canonical_v3(value)
 
 
+# --- D-R10: control characters ---------------------------------------------------------
+
+CONTROL_CHARACTERS = [chr(code) for code in range(0x20)] + ["\x7f"]
+
+
+@pytest.mark.parametrize("char", CONTROL_CHARACTERS, ids=lambda c: f"0x{ord(c):02x}")
+def test_control_characters_are_rejected_in_room_nonce_and_type(char):
+    with pytest.raises(ValueError, match=r"^room: must not contain control characters$"):
+        build_request_canonical_v3(f"room{char}", "n", "t")
+    with pytest.raises(ValueError, match=r"^nonce: must not contain control characters$"):
+        build_request_canonical_v3("room", f"n{char}", "t")
+    with pytest.raises(ValueError, match=r"^event_type: must not contain control characters$"):
+        build_event_canonical_v3(PROOF_ID, f"type{char}", PAYLOAD_HASH, "n")
+    with pytest.raises(ValueError, match=r"^nonce: must not contain control characters$"):
+        build_event_canonical_v3(PROOF_ID, "type", PAYLOAD_HASH, f"n{char}")
+    with pytest.raises(ValueError, match=r"^room: must not contain control characters$"):
+        parse_request_canonical_v3(f"FLOP/REQUEST/v3|room{char}|n|t")
+    with pytest.raises(ValueError, match=r"^nonce: must not contain control characters$"):
+        parse_event_canonical_v3(f"FLOP/EVENT/v3|{PROOF_ID}|type|{PAYLOAD_HASH}|n{char}")
+
+
+@pytest.mark.parametrize("char", CONTROL_CHARACTERS, ids=lambda c: f"0x{ord(c):02x}")
+def test_control_characters_are_allowed_in_request_text(char):
+    fields = ("room", "n", f"before{char}after")
+    assert parse_request_canonical_v3(build_request_canonical_v3(*fields)) == fields
+
+
+def test_characters_next_to_the_control_range_are_allowed():
+    for char in (" ", "~", "\x80", "\xa0", "\u2028"):
+        fields = (f"room{char}", f"n{char}", "t")
+        assert parse_request_canonical_v3(build_request_canonical_v3(*fields)) == fields
+
+
 # --- g) each invalid field, at build and at parse -------------------------------------
 
 def _request_parts(room="room-1", nonce="nonce-1", text="hello"):
@@ -310,7 +345,8 @@ INVALID_EVENT_FIELDS = [
     ({"proof_id": "proof_task_hash_test"}, "proof_id: invalid format"),
     ({"proof_id": PROOF_ID.upper()}, "proof_id: invalid format"),
     ({"proof_id": PROOF_ID + "0"}, "proof_id: invalid format"),
-    ({"proof_id": PROOF_ID + "\n"}, "proof_id: invalid format"),
+    # D-R10: the control-character check runs before the format check.
+    ({"proof_id": PROOF_ID + "\n"}, "proof_id: must not contain control characters"),
     ({"proof_id": "x|" + PROOF_ID}, "proof_id: must not contain '|'"),
     ({"event_type": ""}, "event_type: must not be empty"),
     ({"event_type": "result|created"}, "event_type: must not contain '|'"),
@@ -319,7 +355,7 @@ INVALID_EVENT_FIELDS = [
     ({"payload_hash": PAYLOAD_HASH.upper()}, "payload_hash: must be 64 lowercase hex characters"),
     ({"payload_hash": PAYLOAD_HASH[:-1]}, "payload_hash: must be 64 lowercase hex characters"),
     ({"payload_hash": PAYLOAD_HASH + "0"}, "payload_hash: must be 64 lowercase hex characters"),
-    ({"payload_hash": PAYLOAD_HASH + "\n"}, "payload_hash: must be 64 lowercase hex characters"),
+    ({"payload_hash": PAYLOAD_HASH + "\n"}, "payload_hash: must not contain control characters"),
     ({"payload_hash": "g" * 64}, "payload_hash: must be 64 lowercase hex characters"),
     ({"nonce": ""}, "nonce: must not be empty"),
     ({"nonce": "a|b"}, "nonce: must not contain '|'"),

@@ -11,6 +11,7 @@ from app.crypto import (
     sign_message,
     sha256_json,
 )
+from app.canonical import build_event_canonical_v3, build_request_canonical_v3
 from app.main import app
 
 
@@ -28,7 +29,7 @@ def create_signed_proof():
 
     text = "lifecycle test"
     nonce = "lifecycle-nonce"
-    canonical = f"room-1|{nonce}|{text}"
+    canonical = build_request_canonical_v3("room-1", nonce, text)
 
     signature = sign_message(
         private_key,
@@ -65,7 +66,7 @@ def signed_event(
     nonce,
 ):
     payload_hash = sha256_json(payload)
-    canonical = f"{proof_id}|{event_type}|{payload_hash}"
+    canonical = build_event_canonical_v3(proof_id, event_type, payload_hash, nonce)
 
     signature = sign_message(
         private_key,
@@ -252,6 +253,9 @@ def test_concurrent_event_append_keeps_unique_sequences():
                 event_type="test.concurrent",
                 actor_did=f"did:key:test-{index}",
                 payload={"index": index},
+                # Not a real canonical on purpose: this test only checks
+                # sequence allocation in create_event and never verifies the
+                # chain, so the message format is irrelevant here.
                 canonical=f"{proof_id}|test.concurrent|{index}",
                 signature=f"signature-{index}",
                 nonce=f"nonce-{index}",

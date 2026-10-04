@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.canonical import build_event_canonical_v3, build_request_canonical_v3
 from app.verifier import verify_proof_file, verify_proof_data
 
 
@@ -59,7 +60,7 @@ def proof_file(tmp_path, monkeypatch):
 
         nonce = f"verifier-nonce-{uuid.uuid4().hex}"
         text = "proof created for test_verifier"
-        canonical = f"verifier-room|{nonce}|{text}"
+        canonical = build_request_canonical_v3("verifier-room", nonce, text)
         created = client.post(
             "/proofs",
             json={
@@ -80,7 +81,10 @@ def proof_file(tmp_path, monkeypatch):
         proof_id = created.json()["proof_id"]
 
         def append_event(event_type, payload):
-            event_canonical = f"{proof_id}|{event_type}|{sha256_json(payload)}"
+            event_nonce = f"verifier-event-{uuid.uuid4().hex}"
+            event_canonical = build_event_canonical_v3(
+                proof_id, event_type, sha256_json(payload), event_nonce
+            )
             response = client.post(
                 f"/proofs/{proof_id}/events",
                 json={
@@ -88,7 +92,7 @@ def proof_file(tmp_path, monkeypatch):
                     "actor_did": did,
                     "payload": payload,
                     "signature": {
-                        "nonce": f"verifier-event-{uuid.uuid4().hex}",
+                        "nonce": event_nonce,
                         "sig": sign_message(private_key, event_canonical.encode("utf-8")),
                         "canonical": event_canonical,
                     },
@@ -240,6 +244,10 @@ def test_invalid_events_structure(proof_file):
     assert result["verdict"] == "invalid"
     assert result["error"] == "Invalid events"
 
+# A version-3 proof id (app/canonical.py requires the proof_id pattern).
+TASK_HASH_PROOF_ID = "proof_" + "ab" * 16
+
+
 def _build_signed_result_event(payload):
     """A valid two-event chain: the creator's request.created (sequence 1)
     and its result.created (sequence 2) carrying `payload`.
@@ -258,9 +266,11 @@ def _build_signed_result_event(payload):
 
     private_key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
-    proof_id = "proof_task_hash_test"
+    proof_id = TASK_HASH_PROOF_ID
 
-    request_canonical = "task-hash-room|request-nonce|task hash test"
+    request_canonical = build_request_canonical_v3(
+        "task-hash-room", "request-nonce", "task hash test"
+    )
     request_signature = sign_message(private_key, request_canonical.encode("utf-8"))
     request_payload = {
         "request_id": "request-task-hash-test",
@@ -280,6 +290,7 @@ def _build_signed_result_event(payload):
         "payload_hash": sha256_json(request_payload),
         "canonical": request_canonical,
         "signature": request_signature,
+        "nonce": "request-nonce",
         "created_at": "2026-09-08T00:00:00+00:00",
         "sequence": 1,
         "previous_event_hash": None,
@@ -287,7 +298,7 @@ def _build_signed_result_event(payload):
 
     event_type = "result.created"
     payload_hash = sha256_json(payload)
-    canonical = f"{proof_id}|{event_type}|{payload_hash}"
+    canonical = build_event_canonical_v3(proof_id, event_type, payload_hash, "result-nonce")
     result_event = {
         "event_id": "evt_task_hash_test",
         "type": event_type,
@@ -299,6 +310,7 @@ def _build_signed_result_event(payload):
             private_key,
             canonical.encode("utf-8"),
         ),
+        "nonce": "result-nonce",
         "created_at": "2026-09-08T00:00:01+00:00",
         "sequence": 2,
         "previous_event_hash": hash_event_record(
@@ -353,8 +365,9 @@ def test_legacy_result_has_no_task_hash_requirement():
     events = _build_signed_result_event(payload)
 
     result = verify_proof_events(
-        proof_id="proof_task_hash_test",
+        proof_id=TASK_HASH_PROOF_ID,
         events=events,
+        version="3",
     )
 
     assert result["verdict"] == "valid"
@@ -375,8 +388,9 @@ def test_result_with_consistent_task_hash_is_valid():
     events = _build_signed_result_event(payload)
 
     result = verify_proof_events(
-        proof_id="proof_task_hash_test",
+        proof_id=TASK_HASH_PROOF_ID,
         events=events,
+        version="3",
     )
 
     assert result["verdict"] == "valid"
@@ -397,8 +411,9 @@ def test_result_with_invalid_task_hash_is_invalid():
     events = _build_signed_result_event(payload)
 
     result = verify_proof_events(
-        proof_id="proof_task_hash_test",
+        proof_id=TASK_HASH_PROOF_ID,
         events=events,
+        version="3",
     )
 
     assert result["verdict"] == "invalid"
