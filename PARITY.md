@@ -126,18 +126,32 @@ verified.
 
 CAT-3 implementation is currently BLOCKED by unresolved upstream spec
 ambiguity in FLOP Yellow Paper §12.1, tracked in flop-labs/yellowpaper
-issues:
+issues (state checked 2026-10-05):
 
-- #33: settlement tariff P's unit ("channel pay unit") is undefined;
-  E-P cannot be computed from the text as written.
-- #4: R12.1b's own receipt leaf-tuple example is the legacy V0 preimage,
-  not the F.3 V3 leaf that settle/force_settle actually require (our
-  agent_receipt_v1 implementation correctly follows F.3, not R12.1b).
+Open:
+
 - #85: settlement_class has no published enum/wire definition.
 - #48: reservation-cap slot-release semantics on force_settle->finalize
   close are ambiguous between two readings.
 - #77: Appendix D fee formula conflicts with Appendix A parameters for
   zero-G_n extrinsics.
+
+Closed (both on 2026-09-24, "addressed in the 0.5.0 (draft) sync, commit
+3c97bbc"):
+
+- #33: settlement tariff P's unit ("channel pay unit") was undefined. R12.1d
+  now denominates `P` in the escrow's base unit (10⁻¹⁸ FLOP), sets
+  `channel_base_per_turn` and `rate_G` to one base unit each, and rejects
+  `P > E` with `TariffExceedsEscrow`.
+- #4: R12.1b's receipt leaf-tuple example was the legacy V0 preimage. R12.1b
+  now names Appendix F.3 as the sole transcript-leaf definition (our
+  agent_receipt_v1 implementation already followed F.3).
+
+The two closures do not lift the CAT-3 block. #4 resolved a wording
+conflict that never blocked our implementation. #33 fixes the unit, but its
+closing comment records the follow-on question (what an agent recovers through
+a unilateral `force_settle` at the placeholder tariff) as open item E.24, and
+#85, #48 and #77 remain open.
 
 Until these are resolved upstream (or we find a canonical flop-core
 source), we do not implement open_channel/settle/force_settle/dispute
@@ -184,16 +198,22 @@ attribute individual signatures to that command. It is not verification
 against a live FLOP runtime.
 
 **Compute-channel negative vectors:** Rejection behavior matches the
-canonical negative vectors for the covered cases. `DuplicateVerifiedTurn` and
-`UnsupportedLeafVersion` now match the spec's exception names.
-A path longer than 64 items now raises `MerklePathTooLong`, and wrong
-orientation or root mismatch raises `LeafNotInRoot`; `InvalidMerkleProof`
-remains only for structural errors the spec does not name (malformed path
-item, `u32` index overflow). The `wrong_path_orientation` vector is now tested
+canonical negative vectors for the covered cases. The rejection names come
+from two sources (flop-labs/yellowpaper `3c97bbc8d6`): `BadReceiptSignature`,
+`UnsupportedLeafVersion` and `MerklePathTooLong` appear in the spec text
+(Appendix G.1, `settle` row); `DuplicateVerifiedTurn`, `LeafNotInRoot`,
+`LeafFieldsInconsistent` and `BadValidatorSignature` appear only in the
+wire-format corpus (`evidence/wire-format-v1.json`, `expected`) and its
+generator (`evidence/generate-wire-format-vectors.py`), not in
+`yellowpaper.md`. A path longer than 64 items raises `MerklePathTooLong`, and
+wrong orientation or root mismatch raises `LeafNotInRoot`; `InvalidMerkleProof`
+remains only for structural errors that neither the spec nor the corpus names
+(malformed path item, `u32` index overflow). The `wrong_path_orientation` vector is now tested
 byte-exact at the `verify_turn_proof` layer. An invalid VerifiedTurn enclave
-signature raises the internal `InvalidEnclaveSignature`; the spec defines no name for
-this case, and it is not the spec's `BadValidatorSignature`, which belongs to
-validator-attestation checking (`submit_validator_attestations/check_one`).
+signature raises the internal `InvalidEnclaveSignature`; neither the spec nor the
+corpus names this case (the corpus has no negative case for it), and it is not
+the corpus's `BadValidatorSignature`, which belongs to validator-attestation
+checking (`submit_validator_attestations/check_one`).
 `legacy_leaf_current_channel` is now tested with the vector bytes; the pinned
 policy used is `0x66 * 32` (the generator binds no separate policy to this
 case), and because the policy check runs before signature and Merkle checks,
@@ -201,8 +221,9 @@ the result does not depend on that value. `legacy_receipt_current_channel` is
 now tested with the vector bytes and is rejected with `BadReceiptSignature`;
 its control tests monkeypatch `verified_work_from_turns`, so they prove only
 the receipt-signature layer. `invalid_validator_signature` is now tested with
-the upstream vector bytes; the only remaining difference is that the spec
-uses the name `BadValidatorSignature`, while our function returns False.
+the upstream vector bytes; the only remaining difference is that the corpus
+expects the name `BadValidatorSignature` (the spec text names no error for
+this case), while our function returns False.
 `invalid_agent_ack_signature` is now tested with the vector bytes (see the
 per-turn agent ack note below). Not yet covered: `unknown_retention_enum`.
 
@@ -340,7 +361,7 @@ files other than the root test files. The stale enclave pair in
 | 32-byte representation | 🟢 | LOW | Shape validation |
 | ValidatorAttestation binding | 🟢 | LOW | Signed/bound |
 | Canonical decode-policy object | 🟢 | MEDIUM | CAT-1 — API-boundary implementable; SPEC-CONFORMANT canonical DecodePolicy v1 encoding and hash derivation implemented; INTERNALLY TESTED with canonical encoding, TransformId, Other(u16), and validation tests. |
-| Canonical external-parameter derivation | 🔴 | HIGH | CAT-1 — SPEC-GAP; canonical SamplingParams integer encoding is specified, but the Yellow Paper does not define a normative mapping from external float/string inference parameters to those integers. The API must not invent a conversion rule. |
+| Canonical external-parameter derivation | 🟢 | LOW | CAT-1 — client responsibility, not a spec gap. The Yellow Paper uses integer `SamplingParams` fields on purpose (`temperature_milli:u32`, `top_p_ppm:u32`, …; F.1 "integer policy avoids float encodings"), and F.0 forbids floating-point conversion and rounding in encoders. Converting external float/string inference parameters to those integers is the caller's job before encoding; the API accepts only the integer fields and does not convert. |
 | Independent execution verification | 🔴 | HIGH | CAT-2/3 — execution plus runtime verification; Not implemented |
 
 **Safe wording:** decode_policy_hash can be derived from the canonical DecodePolicy v1 encoding; runtime/model-registry verification remains outside this API boundary.

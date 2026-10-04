@@ -5237,8 +5237,9 @@ def test_validator_attestation_signature_accepts_direct_rail_vector_control():
 
 
 def test_validator_attestation_signature_rejects_invalid_signature_vector():
-    """Negative case `invalid_validator_signature`. The spec name is
-    BadValidatorSignature; this function reports rejection as False."""
+    """Negative case `invalid_validator_signature`. The wire-format corpus
+    expects BadValidatorSignature (the spec text names no error for this
+    case); this function reports rejection as False."""
     from app.crypto import verify_validator_attestation_signature
 
     assert verify_validator_attestation_signature(
