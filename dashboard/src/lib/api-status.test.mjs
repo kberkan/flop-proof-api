@@ -13,7 +13,9 @@ const NEVER_OPERATIONAL = {
   checking: { kind: "checking" },
   "network error": { kind: "network-error", message: "Failed to fetch" },
   timeout: { kind: "timeout", timeoutMs: 5000 },
-  "HTTP 500 (proxy cannot reach the API)": { kind: "response", status: 500, body: { detail: "x" } },
+  "HTTP 500": { kind: "response", status: 500, body: { detail: "x" } },
+  "HTTP 502 (proxy cannot reach the API)": { kind: "response", status: 502, body: { detail: "FLOP API unreachable" } },
+  "HTTP 502 with a health body": { kind: "response", status: 502, body: HEALTH },
   "HTTP 502": { kind: "response", status: 502, body: undefined },
   "HTTP 503": { kind: "response", status: 503, body: HEALTH },
   "HTTP 404": { kind: "response", status: 404, body: { detail: "Not found" } },
@@ -68,6 +70,16 @@ test("badge states and labels", () => {
     apiStatusBadge({ kind: "response", status: 200, body: {} }).detail,
     "Unexpected health response",
   );
+});
+
+test("502 from the proxy is unreachable; other 5xx are errors", () => {
+  assert.deepEqual(
+    apiStatusBadge({ kind: "response", status: 502, body: { detail: "FLOP API unreachable" } }),
+    { status: "unreachable", label: "API unreachable", detail: "HTTP 502" },
+  );
+  for (const status of [500, 503, 504]) {
+    assert.equal(apiStatusBadge({ kind: "response", status, body: undefined }).status, "error", String(status));
+  }
 });
 
 // --- checkHealth: what each fetch outcome becomes ------------------------------

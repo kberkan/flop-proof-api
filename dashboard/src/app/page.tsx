@@ -19,6 +19,9 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ApiStatusIndicator } from "@/components/api-status-indicator";
+import { API_HOST } from "@/lib/api-target";
+import { type LoadOutcome, freshness } from "@/lib/freshness";
 import { statusLabel } from "@/lib/proof-view";
 
 // Lifecycle status only; whether a proof verifies is shown on /verification.
@@ -58,6 +61,8 @@ export default function Home() {
   const [data, setData] = useState<ProofResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Outcome of the most recent load; "Live" is shown only after a success.
+  const [outcome, setOutcome] = useState<LoadOutcome>("pending");
 
   useEffect(() => {
     let cancelled = false;
@@ -77,10 +82,12 @@ export default function Home() {
         if (!cancelled) {
           setData(result);
           setError(null);
+          setOutcome("ok");
         }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Unable to reach API");
+          setOutcome("failed");
         }
       } finally {
         if (!cancelled) {
@@ -99,6 +106,7 @@ export default function Home() {
     };
   }, []);
 
+  const fresh = freshness(outcome);
   const stats = data?.stats ?? {
     total: 0,
     pending: 0,
@@ -166,11 +174,10 @@ export default function Home() {
               <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
                 <Network size={14} /> API Status
               </div>
-              <div className="flex items-center gap-2 text-sm font-medium text-emerald-300">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                Operational
+              <ApiStatusIndicator layout="stacked" />
+              <div className="mt-2 text-[11px] text-slate-600" title="Target of the dashboard proxy">
+                via proxy to {API_HOST}
               </div>
-              <div className="mt-1 text-[11px] text-slate-600">localhost:8000</div>
             </div>
           </div>
         </aside>
@@ -205,9 +212,9 @@ export default function Home() {
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {[
-                ["Total proofs", stats.total.toString(), "Live", FileCheck2],
+                ["Total proofs", stats.total.toString(), fresh.label, FileCheck2],
                 ["Completed proofs", stats.completed.toString(), `${stats.total ? ((stats.completed / stats.total) * 100).toFixed(1) : "0.0"}%`, Flag],
-                ["Active", stats.active.toString(), "Live", CircleDot],
+                ["Active", stats.active.toString(), fresh.label, CircleDot],
                 ["Failed", stats.failed.toString(), `${stats.total ? ((stats.failed / stats.total) * 100).toFixed(1) : "0.0"}%`, XCircle],
               ].map(([label, value, change, Icon]) => {
                 const I = Icon as typeof FileCheck2;
@@ -215,7 +222,7 @@ export default function Home() {
                   <div key={String(label)} className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
                     <div className="flex items-start justify-between">
                       <div className="rounded-xl border border-white/[0.06] bg-white/[0.04] p-2.5"><I size={17} /></div>
-                      <span className="text-[11px] text-slate-600">{String(change)}</span>
+                      <span data-testid="stat-note" className="text-[11px] text-slate-600">{String(change)}</span>
                     </div>
                     <div className="mt-5 text-3xl font-semibold">{String(value)}</div>
                     <div className="mt-1 text-xs text-slate-500">{String(label)}</div>

@@ -1,10 +1,15 @@
-// API status badge for the Developer page. Pure apart from the injected fetch,
+// API status badge (Developer page, overview sidebar). Pure apart from the injected fetch,
 // so it can be tested with `node --test`.
 //
 // Rule: the badge is "operational" (green) only when GET /health answers 200
 // with the body the API sends (app/main.py: {"status": "ok", "service":
 // "flop-proof-api"}). Anything else, including a still-running check, is not
 // green.
+//
+// 502 counts as "unreachable", like a network error: the dashboard proxy
+// answers 502 when it cannot connect to the API (route.ts), and the API itself
+// never sends 502, so a 502 means the API was not reached. Every other HTTP
+// status, including 500 and 504, means something answered and is "error".
 
 export const HEALTH_PATH = "/api/flop/health";
 export const HEALTH_TIMEOUT_MS = 5000;
@@ -49,7 +54,9 @@ export function apiStatusBadge(check: HealthCheck): ApiStatusBadge {
       if (check.status === 200 && isExpectedHealth(check.body)) {
         return { status: "operational", label: "API operational", detail: null };
       }
-      // The dashboard proxy answers 500 when it cannot reach the API.
+      if (check.status === 502) {
+        return { status: "unreachable", label: "API unreachable", detail: "HTTP 502" };
+      }
       return {
         status: "error",
         label: "API unavailable",

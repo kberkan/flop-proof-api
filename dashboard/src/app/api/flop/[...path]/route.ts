@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { API_URL } from "@/lib/api-target";
 import { evaluateProxyRequest } from "@/lib/proxy-policy";
 
-const API_URL = "http://127.0.0.1:8000";
 const PREFIX = "/api/flop";
 
 function rejected(status: 404 | 405) {
@@ -37,14 +37,22 @@ export async function GET(request: NextRequest) {
   }
 
   // Forward only what the API needs; browser headers and cookies stay here.
-  const response = await fetch(`${API_URL}${decision.path}${decision.search}`, {
-    method: "GET",
-    headers: {
-      Accept: request.headers.get("accept") ?? "application/json",
-      "X-API-Key": apiKey,
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${decision.path}${decision.search}`, {
+      method: "GET",
+      headers: {
+        Accept: request.headers.get("accept") ?? "application/json",
+        "X-API-Key": apiKey,
+      },
+      cache: "no-store",
+    });
+  } catch {
+    // Connection refused, DNS, reset: the API could not be reached. A fixed
+    // message, so no internal error detail reaches the browser. Status codes
+    // the API itself returns are passed through unchanged below.
+    return NextResponse.json({ detail: "FLOP API unreachable" }, { status: 502 });
+  }
 
   const responseHeaders = new Headers(response.headers);
   responseHeaders.delete("content-encoding");

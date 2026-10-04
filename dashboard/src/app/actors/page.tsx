@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleDot,
   Fingerprint,
+  Flag,
   RefreshCw,
   ShieldCheck,
   UserRound,
@@ -188,8 +189,10 @@ export default function ActorsPage() {
                     )}
 
                     {actor.completed > 0 && (
-                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-emerald-300">
-                        <CheckCircle2 size={12} />
+                      // Lifecycle status, same neutral style as "Completed" on the proofs
+                      // list; it says nothing about whether the proofs verify.
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-slate-300">
+                        <Flag size={12} />
                         {actor.completed} completed
                       </span>
                     )}
