@@ -208,7 +208,7 @@ generator (`evidence/generate-wire-format-vectors.py`), not in
 `yellowpaper.md`. A path longer than 64 items raises `MerklePathTooLong`, and
 wrong orientation or root mismatch raises `LeafNotInRoot`; `InvalidMerkleProof`
 remains only for structural errors that neither the spec nor the corpus names
-(malformed path item, `u32` index overflow). The `wrong_path_orientation` vector is now tested
+(malformed path item, `u32` index overflow). Reported upstream as an ambiguity: flop-labs/yellowpaper#112. The `wrong_path_orientation` vector is now tested
 byte-exact at the `verify_turn_proof` layer. An invalid VerifiedTurn enclave
 signature raises the internal `InvalidEnclaveSignature`; neither the spec nor the
 corpus names this case (the corpus has no negative case for it), and it is not
@@ -252,11 +252,11 @@ it is tracked as technical debt.
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
 `verify_turn_proof` is not specified by the spec; the implemented order (field
 consistency and policy, signature, path length, path structure, Merkle
-membership) is an implementation choice.
+membership) is an implementation choice. Reported upstream as an ambiguity: flop-labs/yellowpaper#112.
 
 V0/V1 leaves with non-zero `h_ids` or TOPLOC commitment are rejected with
 `LeafFieldsInconsistent` during leaf hash computation (`app/crypto.py`), before
-signature and Merkle checks. Locked by
+signature and Merkle checks. Reported upstream as an ambiguity: flop-labs/yellowpaper#112. Locked by
 `test_verify_turn_proof_rejects_legacy_leaf_with_nonzero_v3_field` in
 `test_compute_channel.py`. (An earlier revision of this document incorrectly
 listed this as a known deviation.)
