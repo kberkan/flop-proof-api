@@ -228,6 +228,14 @@ def verify_turn_proof(
     if not isinstance(enclave_public_key, bytes) or len(enclave_public_key) != H256_SIZE:
         raise ValueError("InvalidEnclavePublicKey")
 
+    # A record built directly (not decoded) can carry a malformed signature;
+    # report it under the same name as a signature that does not verify.
+    if (
+        not isinstance(turn.enclave_sig, bytes)
+        or len(turn.enclave_sig) != SR25519_SIGNATURE_SIZE
+    ):
+        raise ValueError("InvalidEnclaveSignature")
+
     if expected_decode_policy_hash is not None:
         if (
             not isinstance(expected_decode_policy_hash, bytes)

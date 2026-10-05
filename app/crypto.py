@@ -79,6 +79,12 @@ def _h256(value: bytes, name: str) -> bytes:
     return value
 
 
+def _sr25519_signature(value: bytes, name: str) -> bytes:
+    if not isinstance(value, bytes) or len(value) != 64:
+        raise ValueError(f"{name} must be exactly 64 bytes")
+    return value
+
+
 def encode_sampling_params(params: SamplingParams) -> bytes:
     """Canonical SCALE encoding of SamplingParams v1."""
     return (
@@ -579,12 +585,19 @@ def verify_verified_turn_leaf_signature(
     signature: bytes,
     leaf_hash: bytes,
 ) -> bool:
-    """Verify the sr25519 signature over a 32-byte VerifiedTurn leaf hash."""
-    if len(public_key) != 32 or len(signature) != 64 or len(leaf_hash) != 32:
-        return False
+    """Verify the sr25519 signature over a 32-byte VerifiedTurn leaf hash.
+
+    Malformed input (wrong type or length) raises ValueError. An invalid
+    signature returns False, including a key that is not a valid sr25519 point.
+    """
+    _h256(public_key, "public_key")
+    _sr25519_signature(signature, "signature")
+    _h256(leaf_hash, "leaf_hash")
     try:
         return sr25519.verify(signature, leaf_hash, public_key)
-    except Exception:
+    except ValueError:
+        # sr25519 raises for a key that is not a Ristretto point or a
+        # signature without the schnorrkel marker; both are invalid signatures.
         return False
 
 
@@ -704,19 +717,32 @@ def verify_agent_receipt_v1(
     aggregate_gn: int,
     payable: int,
 ) -> bool:
-    """Verify the single agent co-signature over receipt v1."""
-    if len(public_key) != 32 or len(signature) != 64:
-        return False
+    """Verify the single agent co-signature over receipt v1.
 
+    Malformed input (wrong type, length or integer range) raises ValueError.
+    An invalid signature returns False, including a key that is not a valid
+    sr25519 point.
+    """
+    _h256(public_key, "public_key")
+    _sr25519_signature(signature, "signature")
+    _h256(channel_id, "channel_id")
+    _h256(final_root, "final_root")
+    for name, value in (("aggregate_gn", aggregate_gn), ("payable", payable)):
+        # Checked here so a wrong type is a ValueError; the payload builder
+        # keeps its own TypeError for non-integers.
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{name} must be an integer")
+
+    payload = compute_agent_receipt_v1_signable_payload(
+        channel_id=channel_id,
+        final_root=final_root,
+        aggregate_gn=aggregate_gn,
+        payable=payable,
+    )
     try:
-        payload = compute_agent_receipt_v1_signable_payload(
-            channel_id=channel_id,
-            final_root=final_root,
-            aggregate_gn=aggregate_gn,
-            payable=payable,
-        )
         return sr25519.verify(signature, payload, public_key)
-    except Exception:
+    except ValueError:
+        # Not a Ristretto point / no schnorrkel marker: an invalid signature.
         return False
 
 
@@ -1135,10 +1161,13 @@ def verify_validator_attestation_signature(
         event_log_verified=event_log_verified,
         hardware_id_hash=hardware_id_hash,
     )
+    _h256(public_key, "public_key")
+    _sr25519_signature(signature, "signature")
 
     try:
         return sr25519.verify(signature, payload, public_key)
-    except Exception:
+    except ValueError:
+        # Not a Ristretto point / no schnorrkel marker: an invalid signature.
         return False
 
 

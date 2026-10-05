@@ -747,6 +747,30 @@ def test_verify_turn_proof_rejects_flipped_enclave_signature():
         verify_turn_proof(**kwargs)
 
 
+@pytest.mark.parametrize(
+    "make_sig",
+    [
+        pytest.param(lambda sig: sig[:63], id="63-byte-bytes"),
+        pytest.param(lambda sig: "s" * 64, id="64-char-str"),
+        pytest.param(lambda sig: bytearray(sig), id="bytearray-of-valid-signature"),
+        pytest.param(lambda sig: None, id="none"),
+    ],
+)
+def test_verify_turn_proof_rejects_malformed_enclave_sig_with_named_error(make_sig):
+    """A VerifiedTurnRecord built directly (not decoded from FCC4/SCALE) can
+    carry a malformed enclave_sig; verify_turn_proof keeps reporting it as
+    InvalidEnclaveSignature, not as a generic input error."""
+    from dataclasses import replace
+
+    from app.compute_channel import verify_turn_proof
+
+    kwargs = _canonical_v3_turn_proof_kwargs()
+    kwargs["turn"] = replace(kwargs["turn"], enclave_sig=make_sig(kwargs["turn"].enclave_sig))
+
+    with pytest.raises(ValueError, match="^InvalidEnclaveSignature$"):
+        verify_turn_proof(**kwargs)
+
+
 def test_verify_turn_proof_rejects_wrong_path_orientation():
     """Wrong orientation -> LeafNotInRoot (wire-format-v1 negative vector)."""
     from app.compute_channel import verify_turn_proof

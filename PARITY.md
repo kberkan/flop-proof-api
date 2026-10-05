@@ -244,9 +244,19 @@ verify them.
 key that is not a Ristretto point and for a signature without the schnorrkel
 marker. All four sr25519 verification paths convert these to False or to the
 path's named error, and the validator-attestation endpoint returns 409; locked
-by `test_sr25519_edge_cases.py`. The three older verifiers use a broad
-`except Exception`, which also turns programming errors into False; narrowing
-it is tracked as technical debt.
+by `test_sr25519_edge_cases.py`. The broad `except Exception` in the three
+older verifiers (`verify_verified_turn_leaf_signature`,
+`verify_agent_receipt_v1`, `verify_validator_attestation_signature`) has been
+narrowed to the `verify_turn_ack` pattern: only `sr25519.verify` is wrapped,
+and only its `ValueError` (non-point key, unmarked signature) becomes False or
+the path's named error. Malformed input (wrong type, length or integer range)
+now raises `ValueError` instead of returning False. `verify_turn_proof` checks
+`turn.enclave_sig` (bytes, 64 B) itself and keeps reporting a malformed one as
+`InvalidEnclaveSignature`; `verify_receipt` validates its inputs before the
+call and keeps `BadReceiptSignature`. The validator-attestation endpoints
+still answer malformed attestation encoding with 422 before any signature
+check. Locked by `test_signature_input_validation.py` and
+`test_verify_turn_proof_rejects_malformed_enclave_sig_with_named_error`.
 
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
@@ -560,7 +570,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 681 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 711 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
