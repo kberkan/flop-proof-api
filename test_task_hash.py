@@ -4503,9 +4503,18 @@ def test_atomic_validator_bundle_rejects_replay_without_second_credit():
     assert processed_tasks.is_processed(task_hash)
 
 
-def test_atomic_validator_bundle_fails_closed_if_result_binding_raises(
+def test_atomic_validator_bundle_does_not_mark_task_if_result_binding_raises(
     monkeypatch,
 ):
+    """Renamed from ..._fails_closed_if_result_binding_raises. The bundle
+    verifier no longer wraps result binding in `except Exception`: the real
+    validator_attestation_matches_result never raises (fuzz-locked in
+    test_validator_result_validation.py), so an exception there is a bug and
+    now propagates instead of becoming False. What still must hold is
+    atomicity: no task is marked processed when verification does not
+    complete."""
+    import pytest
+
     import app.crypto as crypto
 
     from app.crypto import (
@@ -4532,14 +4541,15 @@ def test_atomic_validator_bundle_fails_closed_if_result_binding_raises(
 
     processed_tasks = ProcessedTasks()
 
-    assert not verify_and_accept_validator_attestation_bundle_for_result(
-        attestations=attestations,
-        result=result,
-        report_data=report_data,
-        registry=registry,
-        threshold=2 / 3,
-        processed_tasks=processed_tasks,
-    )
+    with pytest.raises(RuntimeError, match="unexpected binding failure"):
+        verify_and_accept_validator_attestation_bundle_for_result(
+            attestations=attestations,
+            result=result,
+            report_data=report_data,
+            registry=registry,
+            threshold=2 / 3,
+            processed_tasks=processed_tasks,
+        )
 
     assert not processed_tasks.is_processed(task_hash)
 

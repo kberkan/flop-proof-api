@@ -338,11 +338,12 @@ def validate_gn_latency_throughput_tripwire(
     """Reject implausible G_n/latency claims using the protocol tripwire.
 
     This validates an externally supplied claim; it does not compute G_n.
+    A bool is not a count, although Python treats True as 1.
     """
-    if not isinstance(gn_weight, int) or gn_weight < 0:
+    if not isinstance(gn_weight, int) or isinstance(gn_weight, bool) or gn_weight < 0:
         return False
 
-    if not isinstance(latency_ms, int) or latency_ms <= 0:
+    if not isinstance(latency_ms, int) or isinstance(latency_ms, bool) or latency_ms <= 0:
         return False
 
     return (
@@ -1394,7 +1395,12 @@ def validator_attestation_matches_result(
     )
 
     for field in numeric_fields:
-        if result.get(field) != getattr(attestation, field):
+        value = result.get(field)
+        # The result is a free-form dict; True == 1 in Python, so without
+        # this a boolean would bind to an attestation that signed 1.
+        if isinstance(value, bool):
+            return False
+        if value != getattr(attestation, field):
             return False
 
     return True
@@ -1412,14 +1418,14 @@ def verify_validator_attestation_bundle_for_result(
     if not attestations:
         return False
 
+    # validator_attestation_matches_result returns False for any malformed
+    # result and never raises (locked by
+    # test_result_binding_never_raises_on_json_shaped_or_non_dict_results).
     for attestation in attestations:
-        try:
-            if not validator_attestation_matches_result(
-                attestation=attestation,
-                result=result,
-            ):
-                return False
-        except Exception:
+        if not validator_attestation_matches_result(
+            attestation=attestation,
+            result=result,
+        ):
             return False
 
     if not verify_validator_attestation_report_data(
@@ -1461,15 +1467,13 @@ def verify_and_accept_validator_attestation_bundle_for_result(
         return False
 
     # 1. Bind every validator attestation to the externally supplied result.
-    # Fail closed if the binding helper raises unexpectedly.
+    # The binding helper returns False for any malformed result and never
+    # raises (locked by a fuzz test), so no exception handling is needed.
     for attestation in attestations:
-        try:
-            if not validator_attestation_matches_result(
-                attestation=attestation,
-                result=result,
-            ):
-                return False
-        except Exception:
+        if not validator_attestation_matches_result(
+            attestation=attestation,
+            result=result,
+        ):
             return False
 
     # 2. Bind the attestation claims to TEE report_data.

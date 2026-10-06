@@ -77,12 +77,14 @@ class ValidatorAttestationSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_hash: str = Field(min_length=64, max_length=64)
-    gn_weight: int = Field(ge=0, le=2**64 - 1)
-    latency_ms: int = Field(ge=0, le=2**64 - 1)
+    # strict=True: these are signed integers, so only a JSON integer is
+    # accepted; lax mode would turn true, "1", "1.0" or 1.0 into 1.
+    gn_weight: int = Field(strict=True, ge=0, le=2**64 - 1)
+    latency_ms: int = Field(strict=True, ge=0, le=2**64 - 1)
     model_hash: str = Field(min_length=64, max_length=64)
     output_hash: str = Field(min_length=64, max_length=64)
     decode_policy_hash: str = Field(min_length=64, max_length=64)
-    tee_type: int = Field(ge=0, le=255)
+    tee_type: int = Field(strict=True, ge=0, le=255)
     quote_verified: bool
     event_log_verified: bool
     hardware_id_hash: str = Field(min_length=64, max_length=64)

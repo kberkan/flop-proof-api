@@ -258,6 +258,24 @@ still answer malformed attestation encoding with 422 before any signature
 check. Locked by `test_signature_input_validation.py` and
 `test_verify_turn_proof_rejects_malformed_enclave_sig_with_named_error`.
 
+**Validator-attestation `result` handling:** `POST /validator-attestations/accept`
+checks `result.gn_weight`, `result.latency_ms` and `result.tee_type` before the
+throughput tripwire and the bundle: a missing, non-integer or boolean value is
+422 "Invalid validator result encoding" (previously a missing `gn_weight` or
+`latency_ms` raised `KeyError`, a 500). Booleans are not integers anywhere in
+the result path: the tripwire rejects them, and result binding
+(`validator_attestation_matches_result`) rejects a boolean `gn_weight`,
+`latency_ms` or `tee_type`, so a stored `result.created` with one makes the
+proof-bound endpoint answer 409 (previously `true` bound to an attestation that
+signed `1` and the bundle was accepted with 200). The attestations' own
+integer fields (`gn_weight`, `latency_ms`, `tee_type` in
+`ValidatorAttestationSchema`) are strict: only a JSON integer is accepted, and
+`true`/`false`, numeric strings (`"1"`, `"1.0"`) and floats (`1.0`), which
+Pydantic's lax mode turned into integers, are 422 on both endpoints. The `except Exception` around result
+binding in both bundle verifiers has been removed; a seeded fuzz test over
+20,000 JSON-shaped results and non-dict inputs locks that the helper returns a
+bool and never raises. Locked by `test_validator_result_validation.py`.
+
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
 `verify_turn_proof` is not specified by the spec; the implemented order (field
@@ -570,7 +588,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 715 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 741 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

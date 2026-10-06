@@ -352,6 +352,17 @@ def accept_validator_attestations(
             detail="Invalid validator attestation encoding",
         ) from None
 
+    # The result is a free-form dict: check its integer claims before the
+    # tripwire reads them. Missing, non-integer or boolean is malformed input
+    # (422), not a rejected bundle. Same fields as result binding.
+    for field in ("gn_weight", "latency_ms", "tee_type"):
+        value = request.result.get(field)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise HTTPException(
+                422,
+                detail="Invalid validator result encoding",
+            )
+
     if not validate_gn_latency_throughput_tripwire(
         request.result["gn_weight"],
         request.result["latency_ms"],
