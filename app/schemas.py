@@ -49,9 +49,12 @@ class StarkBatchSubmitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     proofs: list[dict[str, Any]] = Field(default_factory=list)
-    gn_weight: int = Field(ge=0, le=2**64 - 1)
+    # strict=True: the G_n claim stored with the task_hash for later STARK
+    # verification; only a JSON integer is accepted (lax mode would turn
+    # true, "5" or 5.0 into an integer).
+    gn_weight: int = Field(strict=True, ge=0, le=2**64 - 1)
     task_hash: str = Field(min_length=64, max_length=64)
-    latency_ms: int = Field(ge=0, le=2**64 - 1)
+    latency_ms: int = Field(strict=True, ge=0, le=2**64 - 1)
     model_hash: str = Field(min_length=64, max_length=64)
     output_hash: str = Field(min_length=64, max_length=64)
 
@@ -85,8 +88,10 @@ class ValidatorAttestationSchema(BaseModel):
     output_hash: str = Field(min_length=64, max_length=64)
     decode_policy_hash: str = Field(min_length=64, max_length=64)
     tee_type: int = Field(strict=True, ge=0, le=255)
-    quote_verified: bool
-    event_log_verified: bool
+    # strict=True: signed bits of the attestation; only JSON true/false is
+    # accepted (lax mode would turn 1, "true", "yes" or "on" into True).
+    quote_verified: bool = Field(strict=True)
+    event_log_verified: bool = Field(strict=True)
     hardware_id_hash: str = Field(min_length=64, max_length=64)
     validator_id: str = Field(min_length=64, max_length=64)
     signature: str = Field(min_length=86, max_length=88)

@@ -43,4 +43,5 @@ testpaths = [
     "test_sdk_canonical_v3.py",
     "test_signature_input_validation.py",
     "test_validator_result_validation.py",
+    "test_api_input_typing.py",
 ]

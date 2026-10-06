@@ -142,7 +142,7 @@ environment, and removes both afterwards; extra arguments go to pytest. It
 refuses to start if 127.0.0.1:8000 is already in use. Running `pytest` without
 the script uses `./proofs.db` and may write test data to it.
 
-Current regression status: **741 passed**
+Current regression status: **754 passed**
 
 ## Test vectors
 

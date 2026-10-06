@@ -276,6 +276,23 @@ binding in both bundle verifiers has been removed; a seeded fuzz test over
 20,000 JSON-shaped results and non-dict inputs locks that the helper returns a
 bool and never raises. Locked by `test_validator_result_validation.py`.
 
+**API input typing:** Pydantic's lax mode coerces JSON `true`, `"5"`, `" 5 "`,
+`"5.0"` and `5.0` into integers, and `1`, `"true"`, `"yes"`, `"on"` into
+booleans. Every request-body number or boolean with protocol meaning is
+therefore `strict=True` and accepts only its own JSON type (422 otherwise):
+`ValidatorAttestationSchema.gn_weight`, `latency_ms`, `tee_type`,
+`quote_verified` and `event_log_verified` (signed attestation payload and
+report_data), and `StarkBatchSubmitRequest.gn_weight` and `latency_ms` (the G_n
+claim stored with the task_hash). String fields already reject numbers and
+booleans. Locked by `test_validator_result_validation.py` and
+`test_api_input_typing.py`. Not strict, because they have no protocol meaning:
+`GET /proofs` query parameters (`limit` is parsed from the query string, so
+`"5"`, `" 5 "`, `"05"`, `"5.0"` and `"+5"` all give 5, and the handler enforces
+1–100 with 400; `status` must match one of four values exactly), and
+`RequestSchema.created_at`, which also accepts a number as a Unix timestamp; it
+is not part of the signed canonical, but it is stored in the `request.created`
+payload.
+
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
 `verify_turn_proof` is not specified by the spec; the implemented order (field
@@ -588,7 +605,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 741 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 754 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
