@@ -205,7 +205,7 @@ from two sources (flop-labs/yellowpaper `3c97bbc8d6`): `BadReceiptSignature`,
 `LeafFieldsInconsistent` and `BadValidatorSignature` appear only in the
 wire-format corpus (`evidence/wire-format-v1.json`, `expected`) and its
 generator (`evidence/generate-wire-format-vectors.py`), not in
-`yellowpaper.md`. A path longer than 64 items raises `MerklePathTooLong`, and
+`yellowpaper.md`. A path longer than 64 items (`CHANNEL_MAX_MERKLE_PATH_LEN`, defined once in `app/crypto.py` from upstream `channel_max_merkle_path_len` and shared by `verify_turn_proof` and `verify_merkle_path`) raises `MerklePathTooLong`, and
 wrong orientation or root mismatch raises `LeafNotInRoot`; `InvalidMerkleProof`
 remains only for structural errors that neither the spec nor the corpus names
 (malformed path item, `u32` index overflow). Reported upstream as an ambiguity: flop-labs/yellowpaper#112. The `wrong_path_orientation` vector is now tested
@@ -570,7 +570,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 711 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 715 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

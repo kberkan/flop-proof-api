@@ -838,6 +838,46 @@ def test_verify_turn_proof_max_length_path_is_not_too_long():
         verify_turn_proof(**kwargs)
 
 
+def _valid_path_of_length(length: int):
+    """A path that does verify: leaf at index 0, every sibling on the right,
+    root computed by folding the path (F.3 node = blake2_256(left || right))."""
+    import hashlib
+
+    leaf = bytes.fromhex("ab" * 32)
+    path = tuple((bytes([level % 256]) * 32, False) for level in range(length))
+    node = leaf
+    for sibling, _ in path:
+        node = hashlib.blake2b(node + sibling, digest_size=32).digest()
+    return leaf, path, node
+
+
+def test_verify_merkle_path_accepts_valid_path_at_max_length():
+    from app.crypto import verify_merkle_path
+
+    leaf, path, root = _valid_path_of_length(CHANNEL_MAX_MERKLE_PATH_LEN)
+
+    assert verify_merkle_path(leaf, 0, path, root) is True
+
+
+def test_verify_merkle_path_rejects_valid_path_one_over_max_length():
+    """The same construction one level deeper folds to its root too; only the
+    length bound rejects it."""
+    from app.crypto import verify_merkle_path
+
+    leaf, path, root = _valid_path_of_length(CHANNEL_MAX_MERKLE_PATH_LEN + 1)
+
+    assert verify_merkle_path(leaf, 0, path, root) is False
+
+
+def test_merkle_path_bound_has_one_definition():
+    import app.compute_channel
+    import app.crypto
+
+    assert app.compute_channel.CHANNEL_MAX_MERKLE_PATH_LEN is app.crypto.CHANNEL_MAX_MERKLE_PATH_LEN
+    # Upstream value, checked independently of both modules.
+    assert app.crypto.CHANNEL_MAX_MERKLE_PATH_LEN == CHANNEL_MAX_MERKLE_PATH_LEN
+
+
 def test_verify_turn_proof_wrong_path_orientation_matches_negative_vector():
     """Context from the upstream generator: canonical channel_id, Merkle tree
     [V1, V2, V3] with the V3 turn at index 2, enclave key 207b..., and the

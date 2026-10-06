@@ -325,6 +325,11 @@ def validator_attestation_fields_match(
 
 THROUGHPUT_TRIPWIRE_GFLOPS_PER_SEC = 2_000_000
 
+# Longest accepted compute-channel Merkle path: channel_max_merkle_path_len in
+# params/flop-protocol-params.yaml (flop-labs/yellowpaper@3c97bbc8d6). The one
+# definition; app.compute_channel imports it.
+CHANNEL_MAX_MERKLE_PATH_LEN = 64
+
 
 def validate_gn_latency_throughput_tripwire(
     gn_weight: int,
@@ -646,7 +651,7 @@ def verify_merkle_path(
         return False
     if not 0 <= turn_index <= 2**32 - 1:
         return False
-    if len(merkle_path) > 64:
+    if len(merkle_path) > CHANNEL_MAX_MERKLE_PATH_LEN:
         return False
 
     current = leaf_hash

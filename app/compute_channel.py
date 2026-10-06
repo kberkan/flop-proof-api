@@ -4,16 +4,13 @@ from dataclasses import dataclass
 
 
 from app.crypto import (
+    CHANNEL_MAX_MERKLE_PATH_LEN,
     compute_verified_turn_leaf_v0_v1_v2_v3,
     verify_agent_receipt_v1,
     verify_verified_turn_leaf_signature,
     verify_merkle_path,
 )
 FCC4_MAGIC = b"FCC4"
-# channel_max_merkle_path_len from params/flop-protocol-params.yaml
-# (flop-labs/yellowpaper@3c97bbc8d6). Duplicates the hard-coded 64 in
-# app.crypto.verify_merkle_path.
-CHANNEL_MAX_MERKLE_PATH_LEN = 64
 H256_SIZE = 32
 SR25519_SIGNATURE_SIZE = 64
 MAX_TURNS = 1024
