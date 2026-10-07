@@ -68,7 +68,7 @@ const endpoints = [
   },
 ];
 
-// Examples for SDK 0.3.0 and API proof version "3" (docs/design/event-replay.md).
+// Examples for SDK 0.4.0 and API proof version "3" (docs/design/event-replay.md).
 // Placeholders in {braces} are filled in by the caller; the Python examples
 // run as written with FLOP_API_KEY set.
 const createExample = `# The signature is Ed25519 over FLOP/REQUEST/v3|{room}|{nonce}|{text}
@@ -110,7 +110,7 @@ curl -X POST http://localhost:8000/proofs/{proof_id}/events \\
 const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify \\
   -H "X-API-Key: $FLOP_API_KEY"`;
 
-const installExample = `pip install dist/flop_proof_sdk-0.3.0-py3-none-any.whl`;
+const installExample = `pip install dist/flop_proof_sdk-0.4.0-py3-none-any.whl`;
 
 const pythonExample = `import os
 import uuid

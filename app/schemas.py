@@ -1,7 +1,10 @@
-from datetime import datetime
+import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+
+
+_ISO_8601_DATE_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
 
 
 class SignatureSchema(BaseModel):
@@ -18,8 +21,22 @@ class RequestSchema(BaseModel):
     request_id: str = Field(min_length=1)
     from_did: str = Field(min_length=1)
     text: str = Field(min_length=1)
-    created_at: datetime
+    # A timezone-aware ISO 8601 date-time string only: the validator below
+    # rejects numbers, numeric strings (Unix timestamps) and bare dates, and
+    # AwareDatetime rejects naive values. (strict=True is not used: after a
+    # "before" validator it would reject every string.) Stored in the
+    # request.created payload, so its form is part of the hash.
+    created_at: AwareDatetime
     signature: SignatureSchema
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def created_at_is_iso_8601(cls, value: Any) -> Any:
+        # Strict datetime parsing still reads a numeric string ("1759708800")
+        # as a Unix timestamp; require the ISO 8601 date-time shape first.
+        if not isinstance(value, str) or not _ISO_8601_DATE_TIME.match(value):
+            raise ValueError("created_at must be an ISO 8601 date-time with a timezone")
+        return value
 
 
 class ProofCreate(BaseModel):

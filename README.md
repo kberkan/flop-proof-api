@@ -96,7 +96,7 @@ POST /validator-attestations/accept
 
 Install the wheel:
 
-pip install dist/flop_proof_sdk-0.3.0-py3-none-any.whl
+pip install dist/flop_proof_sdk-0.4.0-py3-none-any.whl
 
 Basic usage:
 
@@ -112,6 +112,8 @@ client.create_signed_proof(...)
 
 The SDK signs the version-3 request message `FLOP/REQUEST/v3|room|nonce|text`.
 `POST /proofs` accepts only this format and creates version `"3"` proofs.
+`created_at` must be a timezone-aware ISO 8601 date-time string, e.g.
+`datetime.now(timezone.utc).isoformat()` or `"2026-10-06T12:00:00Z"`.
 
 ## Signed event
 
@@ -121,8 +123,22 @@ The SDK signs the version-3 event message
 `FLOP/EVENT/v3|proof_id|type|payload_hash|nonce`, so the nonce is signed.
 `room`, `nonce` and `type` must not contain `|` or control characters; `text`
 is free. Proofs created before version 3 keep the old formats
-(`room|nonce|text`, `proof_id|type|payload_hash`). SDK 0.3.0 signs only the
+(`room|nonce|text`, `proof_id|type|payload_hash`). SDK 0.3.0 and later sign only the
 version-3 formats. See `docs/design/event-replay.md`.
+
+## Evidence submission
+
+client.submit_stark_evidence(proofs, task_hash=..., gn_weight=..., latency_ms=..., model_hash=..., output_hash=...)
+
+client.accept_validator_attestation(report_data, attestations, result=...)
+
+Both take every field the API requires (SDK 0.4.0; earlier versions omitted
+them and always got 422). Hashes are 64-character hex strings and the counts
+are integers.
+
+`FlopProofClient(..., http_client=...)` accepts an `httpx.Client` used for
+every request; the SDK tests pass the in-process FastAPI `TestClient` this
+way, so each public method runs against the application without a server.
 
 ## Verify
 
@@ -142,7 +158,7 @@ environment, and removes both afterwards; extra arguments go to pytest. It
 refuses to start if 127.0.0.1:8000 is already in use. Running `pytest` without
 the script uses `./proofs.db` and may write test data to it.
 
-Current regression status: **754 passed**
+Current regression status: **770 passed**
 
 ## Test vectors
 
@@ -199,6 +215,6 @@ These boundaries are tracked in `PARITY.md`.
 
 ## Package
 
-Version: 0.3.0
+Version: 0.4.0
 
 Build with: python -m build

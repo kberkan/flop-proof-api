@@ -60,10 +60,15 @@ class FlopProofClient:
         base_url: str,
         timeout: float = 10.0,
         api_key: str | None = None,
+        http_client: httpx.Client | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.api_key = api_key
+        # Optional httpx.Client used for every request (connection reuse, or
+        # an in-process test client); its own timeout setting applies. Without
+        # it each call uses httpx.request with `timeout`.
+        self.http_client = http_client
 
     def _request(
         self,
@@ -77,13 +82,21 @@ class FlopProofClient:
             if self.api_key:
                 headers["X-API-Key"] = self.api_key
 
-            response = httpx.request(
-                method,
-                f"{self.base_url}{path}",
-                timeout=self.timeout,
-                headers=headers,
-                **kwargs,
-            )
+            if self.http_client is not None:
+                response = self.http_client.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    headers=headers,
+                    **kwargs,
+                )
+            else:
+                response = httpx.request(
+                    method,
+                    f"{self.base_url}{path}",
+                    timeout=self.timeout,
+                    headers=headers,
+                    **kwargs,
+                )
         except httpx.HTTPError as exc:
             raise FlopProofError(
                 f"FLOP API connection error: {exc}"
@@ -226,9 +239,14 @@ class FlopProofClient:
         self,
         report_data: str,
         attestations: list[dict[str, Any]],
+        *,
+        result: dict[str, Any],
     ) -> dict[str, Any]:
         """Accept validator-attestation evidence at the API boundary.
 
+        `result` is the result metadata the attestations are bound to; the API
+        requires its task_hash, model_hash, output_hash and decode_policy_hash
+        (64-hex strings) and gn_weight, latency_ms and tee_type (integers).
         This method exposes API-side attestation validation and acceptance.
         It does not imply real execution verification or runtime settlement.
         The response evidence fields are returned unchanged.
@@ -237,6 +255,7 @@ class FlopProofClient:
             "POST",
             "/validator-attestations/accept",
             json={
+                "result": result,
                 "report_data": report_data,
                 "attestations": attestations,
             },
@@ -245,8 +264,18 @@ class FlopProofClient:
     def submit_stark_evidence(
         self,
         proofs: list[dict[str, Any]],
+        *,
+        task_hash: str,
+        gn_weight: int,
+        latency_ms: int,
+        model_hash: str,
+        output_hash: str,
     ) -> dict[str, Any]:
         """Submit STARK evidence for pending API-side verification.
+
+        task_hash, model_hash and output_hash are 64-character hex strings;
+        gn_weight and latency_ms are integers (u64). The API rejects any other
+        JSON type for them, including booleans, numeric strings and floats.
 
         This method performs evidence intake only. The current API response
         uses proof_verified=false and verification_status="pending".
@@ -259,6 +288,11 @@ class FlopProofClient:
             "/stark-batches",
             json={
                 "proofs": proofs,
+                "task_hash": task_hash,
+                "gn_weight": gn_weight,
+                "latency_ms": latency_ms,
+                "model_hash": model_hash,
+                "output_hash": output_hash,
             },
         )
 

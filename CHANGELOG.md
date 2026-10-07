@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.0] - 2026-10-06
+
+### Changed (breaking)
+- `submit_stark_evidence(proofs, *, task_hash, gn_weight, latency_ms,
+  model_hash, output_hash)`: the API requires these fields; the old
+  `submit_stark_evidence(proofs)` always got 422.
+- `accept_validator_attestation(report_data, attestations, *, result)`: the
+  API requires `result`; the old call always got 422.
+
+### Added
+- `FlopProofClient(..., http_client=...)`: an optional `httpx.Client` used for
+  every request (connection reuse, or an in-process test client); its own
+  timeout setting applies.
+
+### API
+- `POST /proofs` accepts `request.created_at` only as a timezone-aware ISO 8601
+  date-time string; numbers, numeric strings, naive date-times and bare dates
+  are 422.
+
 ## [0.3.0] - 2026-10-04
 
 ### Changed

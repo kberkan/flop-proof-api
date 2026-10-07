@@ -116,3 +116,55 @@ def test_attestation_boolean_fields_reject_non_booleans_with_422(registry, field
 
     assert response.status_code == 422, response.text
     assert response.json()["detail"][0]["loc"][-1] == field
+
+
+# --- POST /proofs: request.created_at is a timezone-aware ISO 8601 string ------------------
+
+def _proof_request(created_at):
+    from app.canonical import build_request_canonical_v3
+    from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
+
+    private_key, public_key = generate_test_keypair()
+    nonce = f"typing-{uuid.uuid4().hex}"
+    canonical = build_request_canonical_v3("typing-room", nonce, "typing")
+    return {
+        "request": {
+            "request_id": f"typing-{uuid.uuid4().hex}",
+            "from_did": public_key_to_test_did(public_key),
+            "text": "typing",
+            "created_at": created_at,
+            "signature": {"nonce": nonce, "sig": sign_message(private_key, canonical.encode()), "canonical": canonical},
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "created_at",
+    [
+        pytest.param("2026-10-06T12:00:00Z", id="utc-Z"),
+        pytest.param("2026-10-06T12:00:00+00:00", id="utc-offset"),
+        pytest.param("2026-10-06T15:00:00.123456+03:00", id="other-offset-with-fraction"),
+    ],
+)
+def test_proof_request_accepts_timezone_aware_created_at(in_memory_db, created_at):
+    response = client.post("/proofs", json=_proof_request(created_at))
+
+    assert response.status_code == 201, response.text
+
+
+@pytest.mark.parametrize(
+    "created_at",
+    [
+        pytest.param(0, id="int-0"),
+        pytest.param(1759708800, id="unix-seconds"),
+        pytest.param(1.5, id="float"),
+        pytest.param("1759708800", id="unix-seconds-string"),
+        pytest.param("2026-10-06T12:00:00", id="naive-datetime"),
+        pytest.param("2026-10-06", id="date-only"),
+    ],
+)
+def test_proof_request_rejects_non_iso_or_naive_created_at_with_422(in_memory_db, created_at):
+    response = client.post("/proofs", json=_proof_request(created_at))
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"][0]["loc"][-1] == "created_at"

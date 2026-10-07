@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flop-proof-sdk"
-version = "0.3.0"
+version = "0.4.0"
 description = "Python SDK for the FLOP Proof API"
 requires-python = ">=3.12"
 dependencies = [
@@ -44,4 +44,5 @@ testpaths = [
     "test_signature_input_validation.py",
     "test_validator_result_validation.py",
     "test_api_input_typing.py",
+    "test_sdk_against_app.py",
 ]

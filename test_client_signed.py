@@ -125,9 +125,12 @@ def test_accept_validator_attestation_preserves_evidence_contract():
         {"validator_id": "33" * 32},
     ]
 
+    result = {"task_hash": "11" * 32, "gn_weight": 1}
+
     response = client.accept_validator_attestation(
         report_data="aa" * 32,
         attestations=attestations,
+        result=result,
     )
 
     assert response["accepted"] is True
@@ -140,6 +143,7 @@ def test_accept_validator_attestation_preserves_evidence_contract():
     assert captured["method"] == "POST"
     assert captured["path"] == "/validator-attestations/accept"
     assert captured["kwargs"]["json"] == {
+        "result": result,
         "report_data": "aa" * 32,
         "attestations": attestations,
     }
@@ -175,7 +179,14 @@ def test_submit_stark_evidence_preserves_pending_evidence_contract():
         }
     ]
 
-    response = client.submit_stark_evidence(proofs=proofs)
+    response = client.submit_stark_evidence(
+        proofs=proofs,
+        task_hash="44" * 32,
+        gn_weight=5,
+        latency_ms=7,
+        model_hash="55" * 32,
+        output_hash="66" * 32,
+    )
 
     assert response["accepted"] is True
     assert response["proof_verified"] is False
@@ -189,6 +200,11 @@ def test_submit_stark_evidence_preserves_pending_evidence_contract():
     assert captured["path"] == "/stark-batches"
     assert captured["kwargs"]["json"] == {
         "proofs": proofs,
+        "task_hash": "44" * 32,
+        "gn_weight": 5,
+        "latency_ms": 7,
+        "model_hash": "55" * 32,
+        "output_hash": "66" * 32,
     }
 
 

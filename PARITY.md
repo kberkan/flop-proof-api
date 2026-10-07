@@ -288,10 +288,21 @@ booleans. Locked by `test_validator_result_validation.py` and
 `test_api_input_typing.py`. Not strict, because they have no protocol meaning:
 `GET /proofs` query parameters (`limit` is parsed from the query string, so
 `"5"`, `" 5 "`, `"05"`, `"5.0"` and `"+5"` all give 5, and the handler enforces
-1–100 with 400; `status` must match one of four values exactly), and
-`RequestSchema.created_at`, which also accepts a number as a Unix timestamp; it
-is not part of the signed canonical, but it is stored in the `request.created`
-payload.
+1–100 with 400; `status` must match one of four values exactly).
+`RequestSchema.created_at` is not signed but is stored in the `request.created`
+payload; it accepts only a timezone-aware ISO 8601 date-time string (a
+validator requires the `YYYY-MM-DDTHH:MM` shape and `AwareDatetime` requires an
+offset), so numbers, numeric strings read as Unix timestamps, naive date-times
+and bare dates are 422.
+
+**SDK against the application:** every public `FlopProofClient` method has an
+end-to-end test that runs the SDK through the in-process `TestClient`
+(`http_client=`) on an in-memory database (`test_sdk_against_app.py`). This
+found two methods that never worked against the API: `submit_stark_evidence`
+sent only `proofs` and `accept_validator_attestation` omitted the required
+`result`, so both always got 422 (their tests mocked `_request`). SDK 0.4.0
+takes the required fields. The remaining `_request` mocks in
+`test_client_signed.py` check only the request body the SDK builds.
 
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
@@ -605,7 +616,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 754 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 770 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
