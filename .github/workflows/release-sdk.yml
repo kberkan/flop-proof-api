@@ -1,0 +1,123 @@
+name: Release SDK
+
+# Builds the flop_proof_sdk wheel and sdist for a tag sdk-vX.Y.Z and publishes
+# them, with SHA256SUMS, as a GitHub Release. The tag version must equal the
+# pyproject.toml version, and CHANGELOG.md must have a "## [X.Y.Z]" entry,
+# which becomes the release notes.
+
+on:
+  push:
+    tags: ["sdk-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    env:
+      # The SDK tests import the app in-process; keep its default ./proofs.db
+      # out of the way.
+      FLOP_DATABASE_URL: sqlite:////tmp/flop-release-test.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check tag version against pyproject.toml
+        id: version
+        run: |
+          tag_version="${GITHUB_REF_NAME#sdk-v}"
+          project_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          echo "tag: ${GITHUB_REF_NAME} -> ${tag_version}; pyproject.toml: ${project_version}"
+          if [ "${tag_version}" != "${project_version}" ]; then
+            echo "::error::tag version ${tag_version} does not match pyproject.toml version ${project_version}"
+            exit 1
+          fi
+          echo "version=${project_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import sys
+
+          version = os.environ["VERSION"]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          match = re.search(
+              rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+              text,
+              re.S | re.M,
+          )
+          if not match or not match.group(1).strip():
+              sys.exit(f"CHANGELOG.md has no entry for [{version}]")
+          open("release-notes.md", "w", encoding="utf-8").write(match.group(1).strip() + "\n")
+          PY
+          cat release-notes.md
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt build
+
+      - name: Run SDK tests
+        # The SDK tests that need no live server: canonical-format parity with
+        # the app, every public method against the app in-process, and the
+        # request bodies the client builds.
+        run: >
+          python -m pytest -q
+          test_sdk_canonical_v3.py
+          test_sdk_against_app.py
+          test_client_signed.py -k "not test_signed_sdk_e2e"
+
+      - name: Build wheel and sdist
+        run: python -m build --outdir dist .
+
+      - name: Check the wheel in a clean environment
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python -m venv /tmp/sdk-check
+          /tmp/sdk-check/bin/pip install "dist/flop_proof_sdk-${VERSION}-py3-none-any.whl"
+          cd /tmp
+          /tmp/sdk-check/bin/python - <<'PY'
+          import importlib.metadata
+          import importlib.util
+          import os
+
+          assert importlib.util.find_spec("app") is None, "the API package must not be importable"
+          import flop_proof_sdk
+
+          assert importlib.metadata.version("flop-proof-sdk") == os.environ["VERSION"]
+          canonical = flop_proof_sdk.build_request_canonical_v3("room", "nonce", "a|b")
+          assert canonical == "FLOP/REQUEST/v3|room|nonce|a|b", canonical
+          print("flop_proof_sdk", os.environ["VERSION"], "OK:", canonical)
+          PY
+
+      - name: Write SHA256SUMS
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >
+          gh release create "${GITHUB_REF_NAME}"
+          dist/flop_proof_sdk-${VERSION}-py3-none-any.whl
+          dist/flop_proof_sdk-${VERSION}.tar.gz
+          dist/SHA256SUMS
+          --verify-tag
+          --title "FLOP Proof SDK ${VERSION}"
+          --notes-file release-notes.md
