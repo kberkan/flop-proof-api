@@ -304,6 +304,15 @@ sent only `proofs` and `accept_validator_attestation` omitted the required
 takes the required fields. The remaining `_request` mocks in
 `test_client_signed.py` check only the request body the SDK builds.
 
+**SDK distribution:** the SDK wheel and sdist are no longer committed under
+`dist/` (now ignored). `.github/workflows/release-sdk.yml` publishes them as
+GitHub Release assets with `SHA256SUMS` on a tag `sdk-vX.Y.Z`: it fails unless
+the tag matches the `pyproject.toml` version and `CHANGELOG.md` has an entry
+for it (used as the release notes), runs the SDK tests that need no live
+server, builds, and installs the wheel in a clean venv where `app` cannot be
+imported. A source install (`pip install .` or `git+…@sdk-vX.Y.Z`) contains
+only `flop_proof_sdk`.
+
 `LeafNotInRoot` does not appear in `yellowpaper.md`; the name comes from the
 wire-format-v1 vector corpus (generator and JSON). The order of checks inside
 `verify_turn_proof` is not specified by the spec; the implemented order (field

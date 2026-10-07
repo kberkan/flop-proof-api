@@ -94,9 +94,20 @@ POST /validator-attestations/accept
 
 ## Python SDK
 
-Install the wheel:
+Install the wheel from the GitHub Release:
 
-pip install dist/flop_proof_sdk-0.4.0-py3-none-any.whl
+pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.0/flop_proof_sdk-0.4.0-py3-none-any.whl
+
+Each release (tag `sdk-vX.Y.Z`) also carries the sdist and a `SHA256SUMS`
+file. To verify a download, fetch the wheel and `SHA256SUMS` from the same
+release into one directory and run `sha256sum -c --ignore-missing SHA256SUMS`.
+
+Install from source instead (only the `flop_proof_sdk` package is installed;
+`app/` is not part of it):
+
+pip install "git+https://github.com/kberkan/flop-proof-api.git@sdk-v0.4.0"
+
+or, in a checkout: `pip install .`
 
 Basic usage:
 
@@ -217,4 +228,7 @@ These boundaries are tracked in `PARITY.md`.
 
 Version: 0.4.0
 
-Build with: python -m build
+Build with: python -m build (local builds go to `dist/`, which is not tracked).
+Releases are built and published by `.github/workflows/release-sdk.yml` when a
+tag `sdk-vX.Y.Z` matching the `pyproject.toml` version is pushed; the release
+notes are the `CHANGELOG.md` entry for that version.

@@ -110,7 +110,7 @@ curl -X POST http://localhost:8000/proofs/{proof_id}/events \\
 const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify \\
   -H "X-API-Key: $FLOP_API_KEY"`;
 
-const installExample = `pip install dist/flop_proof_sdk-0.4.0-py3-none-any.whl`;
+const installExample = `pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.0/flop_proof_sdk-0.4.0-py3-none-any.whl`;
 
 const pythonExample = `import os
 import uuid

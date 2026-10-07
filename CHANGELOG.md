@@ -19,6 +19,11 @@
   date-time string; numbers, numeric strings, naive date-times and bare dates
   are 422.
 
+### Distribution
+- The SDK wheel and sdist are published as GitHub Release assets (tag
+  `sdk-v0.4.0`, with `SHA256SUMS`) by `.github/workflows/release-sdk.yml`
+  instead of being committed under `dist/`.
+
 ## [0.3.0] - 2026-10-04
 
 ### Changed
