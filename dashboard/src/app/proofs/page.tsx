@@ -13,6 +13,8 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { Timestamp } from "@/components/timestamp";
+
 type Proof = {
   proof_id: string;
   request_id: string | null;
@@ -277,7 +279,7 @@ export default function ProofsPage() {
                   </p>
 
                   <p className="text-xs text-slate-500">
-                    {new Date(proof.updated_at).toLocaleString()}
+                    <Timestamp value={proof.updated_at} />
                   </p>
                 </Link>
               );

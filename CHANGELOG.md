@@ -21,6 +21,16 @@
 - The tests and `scripts/e2e_client.py` fall back to the same public test API
   key that CI and `scripts/run_tests.sh` use when `FLOP_API_KEY` is not set.
 
+### Fixed (dashboard)
+- Proof times were shown shifted by the viewer's UTC offset and without a time
+  zone: the API sends UTC timestamps without an offset (the event `created_at`
+  string is part of the event-chain hash, so the API keeps that form), and the
+  browser read them as local time. The dashboard now reads them as UTC and
+  shows local time with its offset (e.g. `08.10.2026 23:12:32 GMT+3`), with the
+  UTC ISO value on hover; an unreadable value shows `—`.
+- Browser tab titles: "FLOP Proof Dashboard", with the page name on each page,
+  instead of the create-next-app defaults.
+
 ### Removed
 - `research-report.md`, an unreferenced sample report from 0.1.0 whose
   statements no longer matched the API.

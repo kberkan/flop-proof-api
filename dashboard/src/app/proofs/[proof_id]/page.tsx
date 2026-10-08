@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { Timestamp } from "@/components/timestamp";
 import { verifyBoundary } from "@/lib/evidence-boundary";
 import {
   type CardTone,
@@ -219,14 +220,14 @@ export default function ProofDetailPage({
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {[
+                  {([
                     ["Proof ID", proof.proof_id],
                     ["Request ID", proof.request_id],
                     ["Version", proof.version],
                     ["Status", statusLabel(proof.status)],
-                    ["Created", proof.created_at],
-                    ["Updated", proof.updated_at],
-                  ].map(([label, value]) => (
+                    ["Created", <Timestamp key="created" value={proof.created_at} />],
+                    ["Updated", <Timestamp key="updated" value={proof.updated_at} />],
+                  ] as [string, ReactNode][]).map(([label, value]) => (
                     <div key={label} className="rounded-xl border border-white/[0.06] bg-black/20 p-4">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-slate-600">{label}</p>
                       <p className="mt-2 break-all font-mono text-xs leading-5 text-slate-300">

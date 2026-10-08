@@ -23,6 +23,7 @@ import { ApiStatusIndicator } from "@/components/api-status-indicator";
 import { API_HOST } from "@/lib/api-target";
 import { type LoadOutcome, freshness } from "@/lib/freshness";
 import { statusLabel } from "@/lib/proof-view";
+import { Timestamp } from "@/components/timestamp";
 
 // Lifecycle status only; whether a proof verifies is shown on /verification.
 function Status({ value }: { value: string }) {
@@ -269,7 +270,7 @@ export default function Home() {
                         </div>
                         <div className="mt-1 text-[11px] text-slate-600">
                           {proof.events} {proof.events === 1 ? "event" : "events"} •{" "}
-                          {new Date(proof.created_at).toLocaleString()}
+                          <Timestamp value={proof.created_at} />
                         </div>
                       </div>
                       <Status value={proof.status} />
