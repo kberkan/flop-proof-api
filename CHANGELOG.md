@@ -19,6 +19,15 @@
   from_did", "Invalid actor_did") instead of 401; a well-formed signature that
   does not verify is still 401.
 
+### License
+- The project is licensed under the Apache License 2.0 (`LICENSE`), with a
+  `NOTICE` file. The SDK package metadata declares `license = "Apache-2.0"`
+  and ships `LICENSE` and `NOTICE` in the wheel and sdist from the next SDK
+  release (building now needs setuptools 77 or later). The dashboard's
+  `package.json` declares `"license": "Apache-2.0"`. The upstream
+  wire-format vector values embedded in the tests are not covered; see
+  `NOTICE`.
+
 ### Fixed
 - `alembic upgrade head` on an empty database now creates the full schema. The
   baseline migration was an empty marker, so `proofs` and `proof_events` were

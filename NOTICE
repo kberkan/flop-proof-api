@@ -1,0 +1,12 @@
+FLOP Proof API
+Copyright 2026 kberkan
+
+This project is independent and is not affiliated with FLOP Labs.
+
+Some tests embed hash, preimage and signature values taken unchanged from
+evidence/wire-format-v1.json in flop-labs/yellowpaper
+(https://github.com/flop-labs/yellowpaper, Copyright (c) 2026 FLOP Labs).
+Those values belong to flop-labs/yellowpaper and are not covered by this
+project's Apache License 2.0. Whether upstream's CC BY 4.0 license covers the
+evidence/ data is unclear; see the "Test vectors" section of README.md and
+https://github.com/flop-labs/yellowpaper/issues/99.

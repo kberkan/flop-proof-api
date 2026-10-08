@@ -362,3 +362,10 @@ Build with: python -m build (local builds go to `dist/`, which is not tracked).
 Releases are built and published by `.github/workflows/release-sdk.yml` when a
 tag `sdk-vX.Y.Z` matching the `pyproject.toml` version is pushed; the release
 notes are the `CHANGELOG.md` entry for that version.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE); see also [NOTICE](NOTICE).
+The upstream wire-format vector values embedded in the tests come from
+flop-labs/yellowpaper and are not covered by this license (see
+[Test vectors](#test-vectors)).
