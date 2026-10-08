@@ -1,14 +1,28 @@
+"""End-to-end check of the SDK against a running API (not a pytest test).
+
+    FLOP_API_KEY=... python scripts/e2e_client.py
+
+Talks to http://127.0.0.1:8000, creates a signed proof, appends events, writes
+the exported proof to /tmp/flop-proof.json and an artifact under /tmp, and
+verifies it. Run it against a disposable server: it writes to that server's
+database.
+"""
+
 import hashlib
 import json
 import os
+import sys
 import uuid
+from pathlib import Path
 
-from app.crypto import (
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.crypto import (  # noqa: E402
     generate_test_keypair,
     public_key_to_test_did,
     sign_message,
 )
-from flop_proof_sdk import (
+from flop_proof_sdk import (  # noqa: E402
     FlopProofClient,
     build_event_canonical_v3,
     build_request_canonical_v3,

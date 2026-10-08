@@ -247,7 +247,7 @@ other places D-R1 to D-R7 change. Line numbers in this section are at commit
 | File:line | Use |
 |---|---|
 | `test_api_contract.py:20` | contract tests' signed request |
-| `test_client.py:39` | E2E script's request |
+| `test_client.py:39` (now `scripts/e2e_client.py`) | E2E script's request |
 | `test_event_replay.py:25` | request for the replay tests (room is the `request_id`) |
 | `test_idempotency.py:16` | idempotent `POST /proofs` |
 | `test_lifecycle.py:31` | `create_signed_proof` helper (`:26`) |
@@ -260,7 +260,7 @@ other places D-R1 to D-R7 change. Line numbers in this section are at commit
 
 | File:line | Use |
 |---|---|
-| `test_client.py:65` | E2E script; also writes `/tmp/flop-proof.json`. Since `17fa21d` no test reads that file. |
+| `test_client.py:65` (now `scripts/e2e_client.py`) | E2E script; also writes `/tmp/flop-proof.json`. Since `17fa21d` no test reads that file. |
 | `test_verifier.py:83` | `proof_file` fixture: builds a fresh four-event proof through the API in `tmp_path` on every run (`17fa21d`), so it follows the API's canonical and needs no stale-file handling. |
 | `test_event_replay.py:64` | exact replay (same nonce) → 409 |
 | `test_lifecycle.py:68` | lifecycle appends |

@@ -4,11 +4,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent
 
-# Files intentionally left out of pytest testpaths.
-EXCLUDED_TEST_FILES = {
-    # E2E script, pytest test içermez, canlı sunucu ve yan etki gerektirir.
-    "test_client.py",
-}
+# Files intentionally left out of pytest testpaths. (The live-server E2E
+# script that used to be listed here is now scripts/e2e_client.py.)
+EXCLUDED_TEST_FILES: set[str] = set()
 
 
 def _configured_testpaths() -> set[str]:

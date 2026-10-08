@@ -21,7 +21,7 @@ def proof_file(tmp_path, monkeypatch):
     """Export a fresh four-event proof (request.created, task.delegated,
     result.created, artifact.created) to tmp_path and return its path.
 
-    Same flow as the test_client.py script, but in-process against an
+    Same flow as the scripts/e2e_client.py script, but in-process against an
     in-memory database, so the tests never read a proof or artifact left
     in /tmp by an earlier run and never touch proofs.db.
     """

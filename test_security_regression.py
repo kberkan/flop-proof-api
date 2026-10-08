@@ -1169,19 +1169,15 @@ def test_v3_export_relabelled_as_v2_is_invalid():
         assert result["reason"] == "Missing or unsupported proof version."
 
 
-def test_sdk_end_to_end_v3_flow(monkeypatch):
+def test_sdk_end_to_end_v3_flow():
     """The SDK against the API in-process: create, delegate, result, replay
-    rejected, verified online and offline."""
+    rejected, verified online and offline. The SDK sends through this file's
+    TestClient (http_client=), on the in-memory database."""
     from flop_proof_sdk import FlopProofClient, FlopProofHTTPError
-    from flop_proof_sdk import client as sdk_client_module
 
     from app.verifier import verify_proof_data
 
-    def request_through_testclient(method, url, timeout=None, headers=None, **kwargs):
-        return client.request(method, url.removeprefix("http://sdk.test"), headers=headers, **kwargs)
-
-    monkeypatch.setattr(sdk_client_module.httpx, "request", request_through_testclient)
-    sdk = FlopProofClient("http://sdk.test", api_key=TEST_API_KEY)
+    sdk = FlopProofClient("http://testserver", api_key=TEST_API_KEY, http_client=client)
     key, did = new_actor()
     worker_key, worker_did = new_actor()
 

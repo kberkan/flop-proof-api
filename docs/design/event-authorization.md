@@ -222,7 +222,7 @@ closes the attestation question without a schema change. Revisit with option 3 i
 - **Tests that would break:** none of the passing tests. All API-driven tests
   use one actor (the creator) per proof, and their `task.delegated` events
   delegate to the creator. `test_lifecycle.py:219` bypasses the API through
-  `create_event`. `test_verifier.py` builds its proof with `test_client.py`, a
+  `create_event`. `test_verifier.py` builds its proof with `test_client.py` (since moved to `scripts/e2e_client.py`; `test_verifier.py` now builds its proof in-process), a
   single actor. Three of the four xfail tests would start passing (§11).
 - **Existing exported proofs:** proofs with a single actor stay valid. Proofs
   with a foreign actor become `invalid`. In `proofs.db` that is one proof
