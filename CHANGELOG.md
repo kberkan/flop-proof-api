@@ -9,6 +9,9 @@
   answers 422 ("Invalid from_did" / "Invalid actor_did", 400 "Invalid delegate
   DID" in a delegate list), and the verifier marks such events
   `signature_valid: false`, so the proof is invalid.
+- The verifier decodes Ed25519 signatures strictly: a non-canonical base64url
+  text of a valid signature (non-alphabet characters, non-zero padding bits)
+  no longer verifies, matching the API's 422.
 
 ### Changed
 - `POST /proofs` and `POST /proofs/{proof_id}/events` answer a malformed

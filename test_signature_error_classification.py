@@ -457,3 +457,66 @@ def test_verifier_treats_a_delegation_to_a_small_order_did_as_unauthorized(clien
         assert result["verdict"] == "invalid"
         assert delegation["signature_valid"] is True
         assert delegation["actor_authorized"] is False
+
+
+# --- strict signature decoding in the verifier ------------------------------------------------
+
+B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+
+def non_canonical_variant(sig_b64url: str) -> str:
+    """Same 64 signature bytes, different text: set one of the four
+    padding bits in the final base64url character."""
+    s = sig_b64url.rstrip("=")
+    assert len(s) == 86
+    index = B64URL.index(s[-1])
+    assert index & 0b1111 == 0, "canonical encoding has zero padding bits"
+    variant = s[:-1] + B64URL[index | 0b0001]
+    # A lax decoder maps both strings to the same bytes.
+    assert base64.urlsafe_b64decode(variant + "==") == base64.urlsafe_b64decode(s + "==")
+    assert variant != s
+    return variant
+
+
+def test_non_canonical_signature_text_is_rejected():
+    # Adapted names: the repository's verify_signature takes a public-key
+    # object, so the DID form verify_did_signature(did, message, signature) is
+    # used; sign_message is the signing helper the SDK and other tests use.
+    from app.crypto import decode_ed25519_signature, verify_did_signature
+
+    key, public_key = generate_test_keypair()
+    did = public_key_to_test_did(public_key)
+    message = b"non-canonical signature test"
+    sig = sign_message(key, message)
+
+    assert verify_did_signature(did, message, sig) is True   # control
+
+    variant = non_canonical_variant(sig)
+    with pytest.raises(ValueError):
+        decode_ed25519_signature(variant)
+    assert verify_did_signature(did, message, variant) is False
+
+
+def test_verifier_rejects_non_canonical_signature_text_in_a_stored_chain(client, proof_id):
+    """End to end: a proof made through the API, then one event's stored
+    signature replaced by its non-canonical variant (same bytes) → invalid in
+    /verify and in the offline verifier."""
+    from sqlalchemy import select
+
+    from app.database import get_db
+    from app.models import ProofEvent
+    from app.verifier import verify_proof_data
+
+    assert _post_event(client, proof_id).status_code == 201
+    db = next(app.dependency_overrides[get_db]())
+    event = db.scalars(select(ProofEvent).where(ProofEvent.proof_id == proof_id, ProofEvent.sequence == 2)).one()
+    event.signature = non_canonical_variant(event.signature)
+    db.commit()
+    db.close()
+
+    online = client.get(f"/proofs/{proof_id}/verify").json()
+    offline = verify_proof_data(client.get(f"/proofs/{proof_id}").json())
+
+    for result in (online, offline):
+        assert result["verdict"] == "invalid"
+        assert [check["signature_valid"] for check in result["checks"]] == [True, False]

@@ -915,11 +915,6 @@ def canonical_signed_message(
     return f"{room}|{nonce}|{text}".encode("utf-8")
 
 
-def decode_base64url(value: str) -> bytes:
-    padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(value + padding)
-
-
 def encode_base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
@@ -1058,9 +1053,12 @@ def verify_signature(
     message: bytes,
     signature: str,
 ) -> bool:
+    # Strict: only the canonical base64url text of 64 bytes is a signature.
+    # A lax decoder would drop non-alphabet characters and ignore the padding
+    # bits, so several texts would verify as the same signature.
     try:
         public_key.verify(
-            decode_base64url(signature),
+            decode_ed25519_signature(signature),
             message,
         )
         return True
