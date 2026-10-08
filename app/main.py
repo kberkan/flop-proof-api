@@ -21,6 +21,8 @@ from .crypto import (
     hash_event_record,
     sha256_bytes,
     sha256_json,
+    decode_ed25519_signature,
+    ed25519_public_key_from_did,
     verify_canonical_signature,
     verify_and_accept_validator_attestation_bundle_for_result,
     verify_validator_attestation_bundle_for_result,
@@ -545,6 +547,20 @@ def list_actors(
     }
 
 
+def _require_signature_encoding(signature: str) -> None:
+    try:
+        decode_ed25519_signature(signature)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid signature encoding") from None
+
+
+def _require_ed25519_did(did: str, field: str) -> None:
+    try:
+        ed25519_public_key_from_did(did)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid {field}") from None
+
+
 @app.post("/proofs", status_code=201)
 def create_proof(
     request: ProofCreate,
@@ -565,6 +581,11 @@ def create_proof(
             status_code=401,
             detail=f"Invalid request canonical, expected {REQUEST_TAG}|room|nonce|text ({exc})",
         )
+
+    # Malformed signature or DID is 422, checked before any verification; a
+    # well-formed signature that does not verify stays 401.
+    _require_signature_encoding(signed_request.signature.sig)
+    _require_ed25519_did(signed_request.from_did, "from_did")
 
     try:
         valid = (
@@ -776,6 +797,12 @@ def append_event(
             status_code=401,
             detail="Event canonical message mismatch",
         )
+
+    # Malformed signature or DID is 422, after the canonical check and before
+    # signature verification; a well-formed signature that does not verify
+    # stays 401 (event-authorization.md D1).
+    _require_signature_encoding(event.signature.sig)
+    _require_ed25519_did(event.actor_did, "actor_did")
 
     try:
         valid = verify_canonical_signature(

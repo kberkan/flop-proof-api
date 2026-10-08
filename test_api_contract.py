@@ -107,14 +107,18 @@ def test_empty_request_text_returns_422():
     assert response.status_code == 422
 
 
-def test_invalid_request_signature_returns_401():
+def test_malformed_request_signature_returns_422():
+    """Was ..._invalid_request_signature_returns_401. "invalid-signature" is
+    not 64 bytes of base64url, so it is malformed input (422); a well-formed
+    signature that does not verify is still 401
+    (test_signature_error_classification.py)."""
     body, _, _ = make_signed_request()
     body["request"]["signature"]["sig"] = "invalid-signature"
 
     response = client.post("/proofs", json=body)
 
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid request signature"}
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid signature encoding"}
 
 
 def test_nonexistent_event_proof_returns_404():

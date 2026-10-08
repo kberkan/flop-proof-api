@@ -303,7 +303,7 @@ Approved for implementation. Section numbers refer to this document.
 
 | # | Decision | Section |
 |---|---|---|
-| D1 | Check order on `POST /proofs/{proof_id}/events`: signature (401) → authorization (403) → nonce (409). | §5, §6 |
+| D1 | Check order on `POST /proofs/{proof_id}/events`: signature (401) → authorization (403) → nonce (409). Amended (signature error classification): within the signature step, the canonical comparison (401) comes first, then a malformed signature or `actor_did` (422), then signature verification (401); all of them before the chain write lock. | §5, §6 |
 | D2 | Only the `delegates` list in a `task.delegated` payload grants authority. `delegated_to` stays a legacy field that grants nothing. | §3 |
 | D3 | Authorization is enforced at the API boundary and in the verifier, not in `create_event` (`app/events.py:12`). | §5 |
 | D4 | The events endpoint rejects `request.created`. The creator is the actor of the sequence-1 `request.created`. | §2, §4 |

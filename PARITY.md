@@ -46,6 +46,8 @@ Internal tests are not external runtime parity evidence.
 | Dashboard has no authentication (`dashboard/src/app/api/flop/[...path]/route.ts`) | **Partly fixed.** The proxy now forwards only `GET` on `proofs`, `proofs/{proof_id}`, `proofs/{proof_id}/verify`, `actors` and `health` (GET only, no query parameters; used by the Developer page's API status badge, which is green only for a 200 with the expected `/health` body), with `proof_id` matching `proof_` + 32 hex, and only the `limit` and `status` query parameters on `proofs`; every other method returns 405 and every other path 404 without reaching the API (`dashboard/src/lib/proxy-policy.ts`). It forwards only `Accept` and the API key, not browser headers or cookies. If it cannot connect to the API it answers 502 with the fixed body `{"detail": "FLOP API unreachable"}` (no internal error detail); status codes the API returns are passed through unchanged. **Remaining:** the dashboard has no authentication of its own, so anyone who can reach it can **read** proof data with the server's API key. The dashboard is run locally only, and `npm run dev` / `npm start` bind to `127.0.0.1`. | `dashboard/src/lib/proxy-policy.test.mjs` (`npm test` in `dashboard/`; runs in CI in the `dashboard` job of `.github/workflows/tests.yml`, with `npx tsc --noEmit`) |
 | Events endpoint accepts `request.created` | **Fixed** by the event authorization change (docs/design/event-authorization.md). Was: a second `request.created` could be appended through `POST /proofs/{proof_id}/events` (201). Now it is rejected with 403 for every actor, and the creator is the actor of the sequence-1 `request.created`. | `test_request_created_cannot_be_appended_through_events_endpoint` |
 | Event signatures accepted as proof request signatures | **Fixed (minimal).** Was: an event canonical `proof_id\|type\|payload_hash` also parses as a request canonical `room\|nonce\|text`, so anyone with the API key could submit a victim's event signature to `POST /proofs` and create a proof whose creator is the victim; `/verify` reported it `valid`. Minimal fix (v1/v2 format): `verify_floop_signature` rejects a request whose room is a proof_id (`^proof_[0-9a-f]{32}$`, `app/crypto.py`, same pattern as the dashboard proxy) with 401 "Invalid request signature", and the verifier checks that each `request.created` is bound to its own request (`request_binding_valid`: room not a proof_id, signed nonce and text equal the stored ones, stored signature and actor are the request's). For version-3 proofs it is closed structurally by the domain tags (`FLOP/REQUEST/v3`, `FLOP/EVENT/v3`; docs/design/event-replay.md D-R2): an event canonical never parses as a request, and `POST /proofs` accepts only tagged requests (401 otherwise, D-R4). The minimal fix stays on the v1/v2 verification path, which also rejects any `FLOP/` canonical (D-R11). | `test_event_signature_cannot_create_proof`, `test_verify_rejects_v2_proof_created_from_event_signature`, `test_verify_rejects_v3_proof_created_from_event_signature`, `test_canonical_v3.py`, `test_verify_rejects_request_whose_stored_text_differs_from_signed_text`, `test_request_with_ordinary_room_is_still_accepted`, `test_proof_id_pattern_matches_generated_ids_and_dashboard_proxy` |
+| Small-order Ed25519 keys accepted as actor DIDs | **Fixed.** Was: a `did:key` whose Ed25519 key is one of the 8 small-order points was accepted by the API (`POST /proofs`, `POST /proofs/{proof_id}/events`, delegate lists) and by the verifier (`/verify`, offline verifier); signatures under such keys can verify without a private key, so such a DID could create and complete a proof that `/verify` reported `valid`. Now `did_key_to_public_key` (used by every signature check) and the API pre-check refuse keys that do not decode as a point (RFC 8032 §5.1.3) or have small order (`SMALL_ORDER_ED25519_KEYS`): the API answers 422 "Invalid from_did" / "Invalid actor_did" (400 "Invalid delegate DID" in a delegate list), and the verifier marks such events `signature_valid: false` (an unauthorized delegation for a delegate), so the proof is `invalid`. | `test_signature_error_classification.py` (`test_did_key_to_public_key_rejects_small_order_keys`, `test_verifier_rejects_small_order_did_chain_written_around_the_api`, `test_forged_signature_under_identity_key_creates_no_proof`, `test_delegating_to_a_small_order_did_is_400`, `test_verifier_treats_a_delegation_to_a_small_order_did_as_unauthorized`, `test_small_order_key_list_is_exactly_the_points_of_order_dividing_8`) |
+| Lax base64url decoding of Ed25519 signatures in the verifier | **Open.** `verify_signature` decodes with `decode_base64url`, which drops characters outside the base64url alphabet and ignores trailing bits, so the verifier accepts non-canonical encodings of a valid signature in stored or exported chains. The API refuses them (422 "Invalid signature encoding", strict `decode_ed25519_signature`). | No test yet |
 
 The previous `test_invalid_event_actor_is_rejected` did not test this: its
 request had no signature block and an unknown field, so it passed on a schema
@@ -303,6 +305,30 @@ sent only `proofs` and `accept_validator_attestation` omitted the required
 `result`, so both always got 422 (their tests mocked `_request`). SDK 0.4.0
 takes the required fields. The remaining `_request` mocks in
 `test_client_signed.py` check only the request body the SDK builds.
+
+**Signature error classification:** on `POST /proofs` and
+`POST /proofs/{proof_id}/events`, malformed input is 422 and a well-formed
+signature that does not verify is 401. 422 "Invalid signature encoding": the
+signature is not exactly 64 bytes of canonical base64url (86 characters,
+optionally `==`-padded). 422 "Invalid from_did" / "Invalid actor_did": not a
+`did:key` with the Ed25519 multicodec and a 32-byte key that decodes as a point
+under RFC 8032 §5.1.3 and does not have small order (`cryptography` accepts any
+32 bytes as a key, so both checks are done in `app/crypto.py`). Small-order
+keys are rejected because they admit forged signatures: with the identity point
+as the key, R = identity and S = 0 verify for every message (also in
+`cryptography`/OpenSSL), and before this check such a DID could create a proof,
+append and complete it, and get `valid` from `/verify` without any private key.
+For the other seven small-order keys a forgery verifies for about one message
+in eight, which the caller-chosen nonce makes reachable. The eight keys are
+listed in `SMALL_ORDER_ED25519_KEYS`; a test recomputes them. The verifier
+refuses the same keys through `did_key_to_public_key` (Known Security Gaps,
+"Small-order Ed25519 keys"); its lax base64url decoding of signatures is still
+open there. 401 is unchanged for a signature by another key or with a
+flipped bit, and for canonical problems (an unparseable request canonical, a
+nonce/text mismatch, an event canonical mismatch). The 422 checks run after the
+canonical checks and before signature verification, so event-authorization.md
+D1 (401 → 403 → 409) and the chain write lock are unchanged. Locked by
+`test_signature_error_classification.py`.
 
 **SDK distribution:** the SDK wheel and sdist are no longer committed under
 `dist/` (now ignored). `.github/workflows/release-sdk.yml` publishes them as
@@ -625,7 +651,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 770 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 844 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

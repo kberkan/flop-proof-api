@@ -939,7 +939,97 @@ def did_key_to_public_key(did: str) -> Ed25519PublicKey:
     if len(public_key_bytes) != 32:
         raise ValueError("Invalid Ed25519 public key length")
 
+    # Every signature check (API and verifier) resolves the key here, so the
+    # verifier refuses the same keys as the API's 422 pre-check: bytes that do
+    # not decode as a point, and small-order points, under which signatures
+    # can verify without any private key.
+    if not is_ed25519_point_encoding(public_key_bytes):
+        raise ValueError("Ed25519 public key is not a valid point encoding")
+    if public_key_bytes in SMALL_ORDER_ED25519_KEYS:
+        raise ValueError("Ed25519 public key has small order")
+
     return Ed25519PublicKey.from_public_bytes(public_key_bytes)
+
+
+# RFC 8032 Ed25519 constants for point decoding (§5.1.3).
+_ED25519_P = 2**255 - 19
+_ED25519_D = (-121665 * pow(121666, -1, _ED25519_P)) % _ED25519_P
+_ED25519_SQRT_M1 = pow(2, (_ED25519_P - 1) // 4, _ED25519_P)
+
+# The 8 points of order dividing 8 (the torsion subgroup), as the only
+# encodings of them that pass is_ed25519_point_encoding. A key among them
+# admits forged signatures: with the identity point, R = identity and S = 0
+# verify for every message, in cryptography/OpenSSL as well.
+SMALL_ORDER_ED25519_KEYS = frozenset(
+    bytes.fromhex(key)
+    for key in (
+        "0100000000000000000000000000000000000000000000000000000000000000",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000080",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+    )
+)
+
+# 64 bytes in base64url: 86 characters, optionally padded with "==".
+_ED25519_SIGNATURE_BASE64URL = re.compile(r"[A-Za-z0-9_-]{86}(?:==)?")
+
+
+def is_ed25519_point_encoding(public_key: bytes) -> bool:
+    """True if `public_key` decodes as an Ed25519 point (RFC 8032 §5.1.3).
+
+    cryptography's Ed25519PublicKey.from_public_bytes accepts any 32 bytes, so
+    a key that is not a point would only fail later, as a bad signature.
+    Small-order points are valid encodings and decode.
+    """
+    if not isinstance(public_key, bytes) or len(public_key) != 32:
+        return False
+    p = _ED25519_P
+    y = int.from_bytes(public_key, "little") & ((1 << 255) - 1)
+    x_sign = public_key[31] >> 7
+    if y >= p:
+        return False
+    u = (y * y - 1) % p
+    v = (_ED25519_D * y * y + 1) % p
+    x = (u * pow(v, 3, p) * pow(u * pow(v, 7, p), (p - 5) // 8, p)) % p
+    vx2 = (v * x * x) % p
+    if vx2 == (-u) % p and vx2 != u:
+        x = (x * _ED25519_SQRT_M1) % p
+    elif vx2 != u:
+        return False
+    return not (x == 0 and x_sign == 1)
+
+
+def decode_ed25519_signature(signature: str) -> bytes:
+    """The 64 bytes of a base64url Ed25519 signature (unpadded or "=="-padded,
+    canonical trailing bits). Raises ValueError for anything else."""
+    if not isinstance(signature, str) or not _ED25519_SIGNATURE_BASE64URL.fullmatch(signature):
+        raise ValueError("signature must be 64 bytes of base64url")
+    raw = base64.urlsafe_b64decode(signature[:86] + "==")
+    if len(raw) != 64 or encode_base64url(raw) != signature[:86]:
+        raise ValueError("signature must be 64 bytes of canonical base64url")
+    return raw
+
+
+def ed25519_public_key_from_did(did: str) -> bytes:
+    """The 32-byte Ed25519 key of a did:key, checked to decode as a point of
+    large order. Raises ValueError for any other DID."""
+    if not isinstance(did, str) or not did.startswith("did:key:z"):
+        raise ValueError("Unsupported DID format")
+    decoded = base58.b58decode(did[len("did:key:z"):])
+    if not decoded.startswith(ED25519_PUB_MULTICODEC):
+        raise ValueError("DID does not contain an Ed25519 public key")
+    public_key = decoded[len(ED25519_PUB_MULTICODEC):]
+    if len(public_key) != 32:
+        raise ValueError("Invalid Ed25519 public key length")
+    if not is_ed25519_point_encoding(public_key):
+        raise ValueError("Ed25519 public key is not a valid point encoding")
+    if public_key in SMALL_ORDER_ED25519_KEYS:
+        raise ValueError("Ed25519 public key has small order")
+    return public_key
 
 
 def generate_test_keypair() -> tuple[Ed25519PrivateKey, Ed25519PublicKey]:

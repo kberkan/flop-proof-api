@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+- Small-order Ed25519 keys are refused as actor DIDs. Signatures under such
+  keys can verify without a private key; previously a DID with one could
+  create a proof and append to it, and `/verify` reported it valid. The API
+  answers 422 ("Invalid from_did" / "Invalid actor_did", 400 "Invalid delegate
+  DID" in a delegate list), and the verifier marks such events
+  `signature_valid: false`, so the proof is invalid.
+
+### Changed
+- `POST /proofs` and `POST /proofs/{proof_id}/events` answer a malformed
+  signature or signer DID with 422 ("Invalid signature encoding", "Invalid
+  from_did", "Invalid actor_did") instead of 401; a well-formed signature that
+  does not verify is still 401.
+
 ## [0.4.0] - 2026-10-06
 
 ### Changed (breaking)

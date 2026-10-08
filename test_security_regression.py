@@ -121,6 +121,10 @@ def test_invalid_proof_id_verify_returns_404():
 
 
 def test_tampered_signature_is_rejected():
+    """Appending text makes the signature 94 characters, which is not 64 bytes
+    of base64url: malformed input, 422 (it was 401 before malformed and
+    non-verifying signatures were told apart). A bit-flipped signature of the
+    right length is still 401 (test_signature_error_classification.py)."""
     private_key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
 
@@ -134,8 +138,8 @@ def test_tampered_signature_is_rejected():
 
     response = client.post("/proofs", json=payload)
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid request signature"
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid signature encoding"
 
 
 def test_tampered_canonical_is_rejected():
