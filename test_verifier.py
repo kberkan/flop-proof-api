@@ -13,7 +13,7 @@ from app.canonical import build_event_canonical_v3, build_request_canonical_v3
 from app.verifier import verify_proof_file, verify_proof_data
 
 
-TEST_API_KEY = os.getenv("FLOP_API_KEY", "flop-dev-key-2026")
+TEST_API_KEY = os.getenv("FLOP_API_KEY", "flop-test-key-2026")
 
 
 @pytest.fixture

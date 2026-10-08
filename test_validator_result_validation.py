@@ -31,7 +31,7 @@ from app.crypto import (
 )
 from app.main import app
 
-API_KEY = os.getenv("FLOP_API_KEY", "flop-dev-key-2026")
+API_KEY = os.getenv("FLOP_API_KEY", "flop-test-key-2026")
 client = TestClient(app, headers={"X-API-Key": API_KEY}, raise_server_exceptions=False)
 
 TASK_HASH = bytes.fromhex("11" * 32)

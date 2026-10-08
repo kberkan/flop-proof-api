@@ -18,6 +18,12 @@
   signature or signer DID with 422 ("Invalid signature encoding", "Invalid
   from_did", "Invalid actor_did") instead of 401; a well-formed signature that
   does not verify is still 401.
+- The tests and `scripts/e2e_client.py` fall back to the same public test API
+  key that CI and `scripts/run_tests.sh` use when `FLOP_API_KEY` is not set.
+
+### Removed
+- `research-report.md`, an unreferenced sample report from 0.1.0 whose
+  statements no longer matched the API.
 
 ### License
 - The repository is licensed under the Apache License 2.0 (`LICENSE`), with a

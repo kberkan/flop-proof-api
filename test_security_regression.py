@@ -20,7 +20,7 @@ from app.crypto import (
 from app.main import app
 
 
-TEST_API_KEY = os.getenv("FLOP_API_KEY", "flop-dev-key-2026")
+TEST_API_KEY = os.getenv("FLOP_API_KEY", "flop-test-key-2026")
 
 client = TestClient(app, headers={"X-API-Key": TEST_API_KEY})
 

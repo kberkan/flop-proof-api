@@ -132,7 +132,7 @@ def test_well_formed_input_with_wrong_signature_is_false():
 
 client = TestClient(
     __import__("app.main", fromlist=["app"]).app,
-    headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-dev-key-2026")},
+    headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-test-key-2026")},
     raise_server_exceptions=False,
 )
 

@@ -8,7 +8,7 @@ from flop_proof_sdk import (
 )
 
 
-client = FlopProofClient("http://127.0.0.1:8000", api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"))
+client = FlopProofClient("http://127.0.0.1:8000", api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"))
 
 
 def test_get_unknown_proof_raises_404():

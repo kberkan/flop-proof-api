@@ -44,7 +44,7 @@ def payload_hash(payload):
 
 
 def main():
-    client = FlopProofClient(BASE_URL, api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"))
+    client = FlopProofClient(BASE_URL, api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"))
 
     print("1. HEALTH")
     assert client.health()["status"] == "ok"

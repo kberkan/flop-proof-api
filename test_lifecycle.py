@@ -15,7 +15,7 @@ from app.canonical import build_event_canonical_v3, build_request_canonical_v3
 from app.main import app
 
 
-client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-dev-key-2026")})
+client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-test-key-2026")})
 
 
 def make_keypair():

@@ -21,7 +21,7 @@ client = TestClient(
     headers={
         "X-API-Key": os.getenv(
             "FLOP_API_KEY",
-            "flop-dev-key-2026",
+            "flop-test-key-2026",
         )
     },
 )
@@ -702,7 +702,7 @@ def test_validator_attestation_endpoint_is_single_winner_under_concurrency(
             headers={
                 "X-API-Key": os.getenv(
                     "FLOP_API_KEY",
-                    "flop-dev-key-2026",
+                    "flop-test-key-2026",
                 )
             },
         )
@@ -738,7 +738,7 @@ def test_proof_validator_attestation_throughput_tripwire_rejects_bound_result(mo
 
     api_client = FlopProofClient(
         "http://127.0.0.1:8000",
-        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+        api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"),
     )
 
     private_key, public_key = generate_test_keypair()
@@ -922,7 +922,7 @@ def test_proof_validator_attestation_accepts_bound_result(monkeypatch):
 
     api_client = FlopProofClient(
         "http://127.0.0.1:8000",
-        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+        api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"),
     )
 
     private_key, public_key = generate_test_keypair()
@@ -1076,7 +1076,7 @@ def test_proof_validator_attestation_rejects_missing_result_created(monkeypatch)
 
     api_client = __import__("flop_proof_sdk", fromlist=["FlopProofClient"]).FlopProofClient(
         "http://127.0.0.1:8000",
-        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+        api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"),
     )
 
     from app.crypto import generate_test_keypair, public_key_to_test_did
@@ -1122,7 +1122,7 @@ def test_proof_validator_attestation_rejects_incomplete_result(monkeypatch):
 
     api_client = __import__("flop_proof_sdk", fromlist=["FlopProofClient"]).FlopProofClient(
         "http://127.0.0.1:8000",
-        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+        api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"),
     )
 
     from app.crypto import generate_test_keypair, public_key_to_test_did
@@ -1183,7 +1183,7 @@ def test_proof_validator_attestation_rejects_result_attestation_mismatch(monkeyp
 
     api_client = __import__("flop_proof_sdk", fromlist=["FlopProofClient"]).FlopProofClient(
         "http://127.0.0.1:8000",
-        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+        api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"),
     )
 
     from app.crypto import generate_test_keypair, public_key_to_test_did
@@ -1334,7 +1334,7 @@ def test_proof_validator_attestation_replay_survives_memory_reset(monkeypatch):
 
     api_client = FlopProofClient(
         "http://127.0.0.1:8000",
-        api_key=os.getenv("FLOP_API_KEY", "flop-dev-key-2026"),
+        api_key=os.getenv("FLOP_API_KEY", "flop-test-key-2026"),
     )
 
     private_key, public_key = generate_test_keypair()
