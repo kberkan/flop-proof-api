@@ -1,10 +1,140 @@
 # FLOP Proof API
 
-FLOP Proof API is an API and Python SDK for accepting and validating agent work and proof evidence as cryptographically verifiable structures, while producing independently auditable proof records.
+A FastAPI service, Python SDK and offline verifier that record AI-agent work as
+signed, hash-chained proof records and check validator-attestation evidence
+against the FLOP Yellow Paper wire formats.
 
-The project provides a **proof validation and validator-attestation acceptance boundary** aligned with the evidence boundaries defined by the FLOP protocol.
+> **Independent, non-official project.** It is not built, reviewed or endorsed
+> by FLOP Labs, and it is not the FLOP runtime. Official FLOP sources: the
+> [Yellow Paper](https://flop.finance/intro/yellowpaper/) and
+> [flop-labs/yellowpaper](https://github.com/flop-labs/yellowpaper).
 
-> **Scope:** FLOP Proof API is not the full FLOP runtime or settlement runtime. Canonical FLOP runtime metering, execution infrastructure, and on-chain settlement remain outside this API.
+[![Tests](https://github.com/kberkan/flop-proof-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/kberkan/flop-proof-api/actions/workflows/tests.yml)
+· SDK [0.4.0](https://github.com/kberkan/flop-proof-api/releases/tag/sdk-v0.4.0)
+· per-feature status and parity: [PARITY.md](PARITY.md)
+· [CHANGELOG.md](CHANGELOG.md)
+
+It is for developers who want a record of what an agent was asked, who acted
+on it and what it returned, which a third party can re-check from an exported
+JSON file without running the service.
+
+### What it verifies
+
+- Each proof request and event is Ed25519-signed by a `did:key` actor over a
+  domain-tagged message (`FLOP/REQUEST/v3|…`, `FLOP/EVENT/v3|…`). The API
+  rejects bad signatures; `/verify` and the offline verifier re-check them.
+- Events form a numbered hash chain with SHA-256 payload hashes, so an edited,
+  removed or reordered event in the middle of a proof is detected.
+- Only the proof's creator, or a DID the creator delegated to in a signed
+  `task.delegated` event, can add events, and a signed event cannot be replayed
+  within its proof.
+- Validator attestations: the 179-byte signed payload, the 275-byte SCALE
+  encoding and the sr25519 signatures match the upstream wire vectors;
+  distinct-validator quorum and `report_data` binding are covered by this
+  repository's tests. Validators come from a local registry.
+- `task_hash` v1, `channel_id` v1 and `report_data` v1 match the upstream
+  `wire-format-v1.json` vectors (flop-labs/yellowpaper at `3c97bbc8d6`).
+
+### What it does not verify
+
+- That a model actually ran: there is no model execution or re-execution, and
+  no TEE/DCAP quote or event-log verification. `quote_verified` and
+  `event_log_verified` are claims signed by validators.
+- STARK proofs: `/stark-batches` records the evidence as pending.
+  `accepted=true` never means execution was verified.
+- FLOP accounting: there is no `G_n` / `F_eff` meter. A supplied `gn_weight`
+  only passes a reject-only throughput tripwire.
+- Runtime or chain state: no settlement, payout, credit, runtime
+  ActiveValidators or runtime ProcessedTasks. Replay protection is API-side.
+- Parity with a live FLOP runtime. Items marked UNVERIFIED in
+  [PARITY.md](PARITY.md) (for example `model_hash`, `output_hash`,
+  DecodePolicy) are checked only by this repository's tests.
+- That a proof is complete. The hash chain does not detect events removed
+  from the end of a proof, and neither `/verify` nor the offline verifier
+  checks for it: a closing `proof.completed` event and the export's `status`
+  field are not used (the API only refuses new events after
+  `proof.completed`). To detect truncation, compare the number of events
+  (`events_checked` from `/verify`, `Events:` from the offline verifier) or
+  the last event with a record kept outside the service.
+
+### Quickstart
+
+Python 3.12 or later. Work in an empty directory; the clone goes into
+`flop-proof-api/` inside it. Start the API with its own database:
+
+```sh
+git clone https://github.com/kberkan/flop-proof-api.git
+cd flop-proof-api
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+export FLOP_API_KEY=dev-key FLOP_DATABASE_URL=sqlite:///./quickstart.db
+.venv/bin/python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(engine)"
+.venv/bin/uvicorn app.main:app      # http://127.0.0.1:8000
+```
+
+Open a second terminal in the same directory, the one that contains
+`flop-proof-api/` (not inside the clone). `sdk-env/`, `quickstart.py` and
+`proof.json` are created there. Install the SDK from the GitHub Release and
+save the script below as `quickstart.py`:
+
+```sh
+python3 -m venv sdk-env
+sdk-env/bin/pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.0/flop_proof_sdk-0.4.0-py3-none-any.whl
+```
+
+```python
+import json
+import os
+import uuid
+from datetime import datetime, timezone
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from flop_proof_sdk import FlopProofClient, public_key_to_test_did
+
+client = FlopProofClient("http://127.0.0.1:8000", api_key=os.environ["FLOP_API_KEY"])
+
+key = Ed25519PrivateKey.generate()
+did = public_key_to_test_did(key.public_key())
+
+proof = client.create_signed_proof(
+    private_key=key,
+    did=did,
+    text="summarize the report",
+    room="quickstart",
+    nonce=uuid.uuid4().hex,
+    request_id=uuid.uuid4().hex,
+    created_at=datetime.now(timezone.utc).isoformat(),
+)
+client.append_signed_event(proof["proof_id"], key, did, "result.created", {"summary": "done"}, uuid.uuid4().hex)
+
+print(proof["proof_id"], client.verify_proof(proof["proof_id"])["verdict"])
+
+with open("proof.json", "w") as f:
+    json.dump(client.get_proof(proof["proof_id"]), f)
+```
+
+```sh
+FLOP_API_KEY=dev-key sdk-env/bin/python quickstart.py
+# proof_… valid
+```
+
+Check the exported file offline. Run this from the same directory; it
+enters the clone because the verifier is part of `app/`, not of the SDK:
+
+```sh
+cd flop-proof-api && .venv/bin/python -m app.verifier ../proof.json
+# … Verdict: VALID
+```
+
+### Upstream
+
+Conformance notes from this work were reported upstream:
+[flop-labs/yellowpaper#112](https://github.com/flop-labs/yellowpaper/issues/112)
+(rejection names and check order for `verify_turn_proof` vectors) and a
+follow-up comment on
+[flop-labs/yellowpaper#46](https://github.com/flop-labs/yellowpaper/issues/46)
+(corpus errata).
+
+---
 
 ## Guarantee Boundary
 
