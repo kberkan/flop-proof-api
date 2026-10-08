@@ -67,7 +67,7 @@ git clone https://github.com/kberkan/flop-proof-api.git
 cd flop-proof-api
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 export FLOP_API_KEY=dev-key FLOP_DATABASE_URL=sqlite:///./quickstart.db
-.venv/bin/python -c "import app.models; from app.database import Base, engine; Base.metadata.create_all(engine)"
+.venv/bin/alembic upgrade head      # creates the tables in quickstart.db
 .venv/bin/uvicorn app.main:app      # http://127.0.0.1:8000
 ```
 
@@ -299,7 +299,7 @@ environment, and removes both afterwards; extra arguments go to pytest. It
 refuses to start if 127.0.0.1:8000 is already in use. Running `pytest` without
 the script uses `./proofs.db` and may write test data to it.
 
-Current regression status: **846 passed**
+Current regression status: **849 passed**
 
 ## Test vectors
 

@@ -651,7 +651,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 846 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 849 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

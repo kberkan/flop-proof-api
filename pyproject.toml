@@ -46,4 +46,5 @@ testpaths = [
     "test_api_input_typing.py",
     "test_sdk_against_app.py",
     "test_signature_error_classification.py",
+    "test_migrations.py",
 ]

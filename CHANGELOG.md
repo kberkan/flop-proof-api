@@ -19,6 +19,16 @@
   from_did", "Invalid actor_did") instead of 401; a well-formed signature that
   does not verify is still 401.
 
+### Fixed
+- `alembic upgrade head` on an empty database now creates the full schema. The
+  baseline migration was an empty marker, so `proofs` and `proof_events` were
+  never created and the first `POST /proofs` answered 500. A database created
+  earlier with `Base.metadata.create_all` (no `alembic_version` table) already
+  has every table; adopt it once with `alembic stamp head` (running
+  `alembic upgrade head` on it fails with "table already exists", as before).
+  `scripts/run_tests.sh` builds its test database with the migrations, and
+  `test_migrations.py` checks that they produce the schema of `app/models.py`.
+
 ## [0.4.0] - 2026-10-06
 
 ### Changed (breaking)

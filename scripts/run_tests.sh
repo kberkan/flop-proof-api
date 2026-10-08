@@ -59,13 +59,19 @@ export FLOP_RATE_LIMIT_ENABLED=false
 "$PYTHON" - <<'PY' || exit 1
 import os
 
-from app.database import Base, DATABASE_URL, engine
-import app.models  # noqa: F401  (registers the tables)
+from app.database import DATABASE_URL
 
 assert DATABASE_URL == os.environ["FLOP_DATABASE_URL"], DATABASE_URL
-Base.metadata.create_all(bind=engine)
 print(f"run_tests.sh: test database {DATABASE_URL}")
 PY
+
+# The schema comes from the migrations, as for any other database
+# (test_migrations.py checks that it equals app/models.py).
+"$PYTHON" -m alembic upgrade head > "$LOG_DIR/alembic.log" 2>&1 || {
+    echo "run_tests.sh: alembic upgrade head failed:" >&2
+    cat "$LOG_DIR/alembic.log" >&2
+    exit 1
+}
 
 "$PYTHON" -m uvicorn app.main:app --host "$HOST" --port "$PORT" > "$LOG" 2>&1 &
 SERVER_PID=$!
