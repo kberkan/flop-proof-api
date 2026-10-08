@@ -10,7 +10,7 @@ against the FLOP Yellow Paper wire formats.
 > [flop-labs/yellowpaper](https://github.com/flop-labs/yellowpaper).
 
 [![Tests](https://github.com/kberkan/flop-proof-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/kberkan/flop-proof-api/actions/workflows/tests.yml)
-· SDK [0.4.0](https://github.com/kberkan/flop-proof-api/releases/tag/sdk-v0.4.0)
+· SDK [0.4.1](https://github.com/kberkan/flop-proof-api/releases/tag/sdk-v0.4.1)
 · per-feature status and parity: [PARITY.md](PARITY.md)
 · [CHANGELOG.md](CHANGELOG.md)
 
@@ -78,7 +78,7 @@ save the script below as `quickstart.py`:
 
 ```sh
 python3 -m venv sdk-env
-sdk-env/bin/pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.0/flop_proof_sdk-0.4.0-py3-none-any.whl
+sdk-env/bin/pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.1/flop_proof_sdk-0.4.1-py3-none-any.whl
 ```
 
 ```python
@@ -226,7 +226,7 @@ POST /validator-attestations/accept
 
 Install the wheel from the GitHub Release:
 
-pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.0/flop_proof_sdk-0.4.0-py3-none-any.whl
+pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.1/flop_proof_sdk-0.4.1-py3-none-any.whl
 
 Each release (tag `sdk-vX.Y.Z`) also carries the sdist and a `SHA256SUMS`
 file. To verify a download, fetch the wheel and `SHA256SUMS` from the same
@@ -235,7 +235,7 @@ release into one directory and run `sha256sum -c --ignore-missing SHA256SUMS`.
 Install from source instead (only the `flop_proof_sdk` package is installed;
 `app/` is not part of it):
 
-pip install "git+https://github.com/kberkan/flop-proof-api.git@sdk-v0.4.0"
+pip install "git+https://github.com/kberkan/flop-proof-api.git@sdk-v0.4.1"
 
 or, in a checkout: `pip install .`
 
@@ -356,7 +356,7 @@ These boundaries are tracked in `PARITY.md`.
 
 ## Package
 
-Version: 0.4.0
+Version: 0.4.1
 
 Build with: python -m build (local builds go to `dist/`, which is not tracked).
 Releases are built and published by `.github/workflows/release-sdk.yml` when a

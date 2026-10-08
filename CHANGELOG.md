@@ -20,13 +20,11 @@
   does not verify is still 401.
 
 ### License
-- The project is licensed under the Apache License 2.0 (`LICENSE`), with a
-  `NOTICE` file. The SDK package metadata declares `license = "Apache-2.0"`
-  and ships `LICENSE` and `NOTICE` in the wheel and sdist from the next SDK
-  release (building now needs setuptools 77 or later). The dashboard's
-  `package.json` declares `"license": "Apache-2.0"`. The upstream
-  wire-format vector values embedded in the tests are not covered; see
-  `NOTICE`.
+- The repository is licensed under the Apache License 2.0 (`LICENSE`), with a
+  `NOTICE` file; the dashboard's `package.json` declares
+  `"license": "Apache-2.0"`. The upstream wire-format vector values embedded
+  in the tests are not covered; see `NOTICE`. The SDK package carries the
+  license from 0.4.1.
 
 ### Fixed
 - `alembic upgrade head` on an empty database now creates the full schema. The
@@ -37,6 +35,18 @@
   `alembic upgrade head` on it fails with "table already exists", as before).
   `scripts/run_tests.sh` builds its test database with the migrations, and
   `test_migrations.py` checks that they produce the schema of `app/models.py`.
+
+## [0.4.1] - 2026-10-08
+
+This release does not change SDK code: `flop_proof_sdk` is the same as in
+0.4.0. It adds license information to the package. The API and server changes
+listed under [Unreleased] are not part of the SDK package.
+
+### License
+- The SDK is licensed under the Apache License 2.0. The package metadata
+  declares `License-Expression: Apache-2.0`, and the wheel and sdist include
+  `LICENSE` and `NOTICE`.
+- Building the package needs setuptools 77 or later.
 
 ## [0.4.0] - 2026-10-06
 
