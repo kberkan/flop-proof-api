@@ -30,6 +30,8 @@
   UTC ISO value on hover; an unreadable value shows `—`.
 - Browser tab titles: "FLOP Proof Dashboard", with the page name on each page,
   instead of the create-next-app defaults.
+- Browser tab icon: an "F" tile matching the sidebar logo
+  (`dashboard/src/app/icon.svg`) replaces the create-next-app `favicon.ico`.
 
 ### Removed
 - `research-report.md`, an unreferenced sample report from 0.1.0 whose
