@@ -11,9 +11,10 @@ export type EvidenceBoundary = {
 export const evidenceBoundary: EvidenceBoundary[] = [
   {
     endpoint: "/proofs/{proof_id}/verify",
-    proves: "The stored proof event chain and its cryptographic integrity.",
+    proves:
+      "Signatures, payload hashes and actor authorization of the stored events, and that their numbering and links are consistent.",
     doesNotProve:
-      "Real model execution, TEE attestation, STARK verification, runtime settlement, or FLOP reward credit.",
+      "That the stored events are complete and in their original order (links can be recomputed without a key), real model execution, TEE attestation, STARK verification, runtime settlement, or FLOP reward credit.",
   },
   {
     endpoint: "/validator-attestations/accept",

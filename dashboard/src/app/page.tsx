@@ -207,7 +207,7 @@ export default function Home() {
                 Cryptographic proof, <span className="text-slate-500">made observable.</span>
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-                Monitor proof lifecycle, inspect event chains and independently verify cryptographic integrity from one workspace.
+                Monitor proof lifecycle, inspect events and independently check their signatures, payload hashes and actor authorization from one workspace.
               </p>
             </div>
 
@@ -296,7 +296,7 @@ export default function Home() {
                 </div>
 
                 <div className="mt-6 space-y-3">
-                  {["Payload hashes", "Canonical messages", "Ed25519 signatures", "Event chain", "Actor authorization (creator or delegate)"].map((item) => (
+                  {["Payload hashes", "Canonical messages", "Ed25519 signatures", "Event numbering and links", "Actor authorization (creator or delegate)"].map((item) => (
                     <div key={item} className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-2.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
                       <span className="text-xs text-slate-400">{item}</span>

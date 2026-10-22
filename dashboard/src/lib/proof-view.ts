@@ -111,7 +111,7 @@ const CHECK_FIELDS: {
   { key: "signatures", label: "Ed25519 signatures", fields: ["signature_valid"], scope: "every-event", perEvent: false },
   { key: "canonical", label: "Canonical messages", fields: ["canonical_valid"], scope: "every-event", perEvent: false },
   { key: "payload", label: "Payload hashes", fields: ["payload_hash_valid"], scope: "every-event", perEvent: false },
-  { key: "chain", label: "Event chain (order and links)", fields: ["sequence_valid", "chain_valid"], scope: "every-event", perEvent: false },
+  { key: "chain", label: "Event numbering and links", fields: ["sequence_valid", "chain_valid"], scope: "every-event", perEvent: false },
   { key: "authorization", label: "Actor authorization", fields: ["actor_authorized"], scope: "every-event", perEvent: false },
   { key: "request_binding", label: "Request binding", fields: ["request_binding_valid"], scope: "request-created", perEvent: true },
   { key: "format", label: "Message format", fields: ["format_valid"], scope: "every-event", perEvent: true },

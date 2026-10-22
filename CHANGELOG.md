@@ -13,6 +13,21 @@
   text of a valid signature (non-alphabet characters, non-zero padding bits)
   no longer verifies, matching the API's 422.
 
+### Documentation
+- Corrected the event-chain claim in the README and the dashboard: a change to
+  an event's signed content is detected, but events removed from or reordered
+  in an export (or the database) with the chain links recomputed are not,
+  because the chain hash uses no key and signatures do not cover an event's
+  position. Events written to the database after a closing event, around the
+  API, are not detected either. Dashboard wording: "Event chain (order and
+  links)" is now "Event numbering and links", and the `/verify` evidence
+  boundary no longer says it proves the chain's integrity.
+- New open row in `PARITY.md` (Known Security Gaps): "Export events can be
+  removed or reordered and re-linked; events written after a closing event
+  are not detected by the verifier", locked by three strict-xfail tests in
+  `test_security_regression.py`.
+- Added `docs/design/proof-closure.md` (proposal, not implemented).
+
 ### Changed
 - `POST /proofs` and `POST /proofs/{proof_id}/events` answer a malformed
   signature or signer DID with 422 ("Invalid signature encoding", "Invalid

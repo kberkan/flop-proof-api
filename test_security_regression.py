@@ -1208,3 +1208,132 @@ def test_sdk_end_to_end_v3_flow():
     assert all(e["canonical"].startswith("FLOP/EVENT/v3|") for e in exported["events"][1:])
     assert [e["nonce"] for e in exported["events"][1:]] == ["sdk-n1", "sdk-n2"]
     assert online["verdict"] == verify_proof_data(exported)["verdict"] == "valid"
+
+
+# ---------------------------------------------------------------------------
+# Known gap: re-linked exports and events after a closing event
+# (PARITY.md, Known Security Gaps, "Export events can be removed or reordered
+# and re-linked; events written after a closing event are not detected by the
+# verifier"; docs/design/proof-closure.md, M9, M10, M13). Strict xfail:
+# each test asks for the intended behavior and fails today.
+# ---------------------------------------------------------------------------
+
+CHAIN_GAP = "known gap (PARITY.md: re-linked exports, events after closing): "
+
+
+def _relinked(exported):
+    """Renumber `sequence` from 1 and recompute every `previous_event_hash`
+    from the exported fields. Needs no key: the chain hash is unkeyed."""
+    from app.crypto import hash_event_record
+
+    previous = None
+    for sequence, event in enumerate(exported["events"], start=1):
+        event["sequence"] = sequence
+        event["previous_event_hash"] = None if previous is None else hash_event_record(
+            event_id=previous["event_id"],
+            proof_id=exported["proof_id"],
+            event_type=previous["type"],
+            actor_did=previous["actor_did"],
+            payload_hash=previous["payload_hash"],
+            canonical=previous["canonical"],
+            signature=previous["signature"],
+            created_at=previous["created_at"],
+            sequence=previous["sequence"],
+        )
+        previous = event
+    return exported
+
+
+def _closed_proof_export():
+    """request.created, agent.started, artifact.note, result.created,
+    proof.completed, all through the API; returns the export."""
+    from app.verifier import verify_proof_data
+
+    proof, key, did = create_proof()
+    proof_id = proof["proof_id"]
+    for event_type, payload in [
+        ("agent.started", {"step": 1}),
+        ("artifact.note", {"note": "between"}),
+        ("result.created", {"content": "done"}),
+        ("proof.completed", {}),
+    ]:
+        assert append(key, did, proof_id, event_type, payload).status_code == 201
+    exported = client.get(f"/proofs/{proof_id}").json()
+    assert verify_proof_data(exported)["verdict"] == "valid"
+    return exported
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=CHAIN_GAP + "an event removed from an export and the chain re-linked still verifies (M9)",
+)
+def test_offline_verifier_rejects_export_with_event_removed_and_relinked():
+    from app.verifier import verify_proof_data
+
+    exported = _closed_proof_export()
+    del exported["events"][3]  # result.created; the closing event stays last
+
+    result = verify_proof_data(_relinked(exported))
+
+    assert [e["type"] for e in exported["events"]] == [
+        "request.created", "agent.started", "artifact.note", "proof.completed",
+    ]
+    assert result["verdict"] == "invalid"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=CHAIN_GAP + "two events swapped in an export and the chain re-linked still verifies (M10)",
+)
+def test_offline_verifier_rejects_export_with_events_reordered_and_relinked():
+    from app.verifier import verify_proof_data
+
+    exported = _closed_proof_export()
+    events = exported["events"]
+    events[1], events[2] = events[2], events[1]
+
+    result = verify_proof_data(_relinked(exported))
+
+    assert [e["type"] for e in events][:3] == ["request.created", "artifact.note", "agent.started"]
+    assert result["verdict"] == "invalid"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=CHAIN_GAP + "a creator-signed event written around the API after proof.completed still verifies (M13)",
+)
+def test_verify_rejects_event_written_after_closing_event(in_memory_db):
+    from app.events import create_event
+
+    proof, key, did = create_proof()
+    proof_id = proof["proof_id"]
+    assert append(key, did, proof_id, "proof.completed", {}).status_code == 201
+    # The API refuses it (409), so it is written directly.
+    late = signed_event(key, did, proof_id, "agent.started", {"late": True})
+    assert client.post(f"/proofs/{proof_id}/events", json=late).status_code == 409
+
+    db = in_memory_db()
+    try:
+        create_event(
+            db=db,
+            proof_id=proof_id,
+            event_type=late["type"],
+            actor_did=did,
+            payload=late["payload"],
+            canonical=late["signature"]["canonical"],
+            signature=late["signature"]["sig"],
+            nonce=late["signature"]["nonce"],
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    verification = client.get(f"/proofs/{proof_id}/verify").json()
+
+    assert [c["type"] for c in verification["checks"]] == [
+        "request.created", "proof.completed", "agent.started",
+    ]
+    assert verification["verdict"] == "invalid"

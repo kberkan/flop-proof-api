@@ -23,8 +23,10 @@ JSON file without running the service.
 - Each proof request and event is Ed25519-signed by a `did:key` actor over a
   domain-tagged message (`FLOP/REQUEST/v3|…`, `FLOP/EVENT/v3|…`). The API
   rejects bad signatures; `/verify` and the offline verifier re-check them.
-- Events form a numbered hash chain with SHA-256 payload hashes, so an edited,
-  removed or reordered event in the middle of a proof is detected.
+- Each event's payload hash and signature are re-checked, so a change to an
+  event's signed content (type, payload, nonce) is detected. Events are
+  numbered and hash-linked; the links detect a removed or reordered event only
+  if they were not recomputed (see below).
 - Only the proof's creator, or a DID the creator delegated to in a signed
   `task.delegated` event, can add events, and a signed event cannot be replayed
   within its proof.
@@ -49,13 +51,20 @@ JSON file without running the service.
 - Parity with a live FLOP runtime. Items marked UNVERIFIED in
   [PARITY.md](PARITY.md) (for example `model_hash`, `output_hash`,
   DecodePolicy) are checked only by this repository's tests.
-- That a proof is complete. The hash chain does not detect events removed
-  from the end of a proof, and neither `/verify` nor the offline verifier
-  checks for it: a closing `proof.completed` event and the export's `status`
-  field are not used (the API only refuses new events after
-  `proof.completed`). To detect truncation, compare the number of events
-  (`events_checked` from `/verify`, `Events:` from the offline verifier) or
-  the last event with a record kept outside the service.
+- That a proof's events are complete and in their original order. The chain
+  hash (`previous_event_hash`) uses no key, and signatures do not cover an
+  event's position, `sequence` or `created_at`. Anyone holding an export (or
+  the database) can remove or reorder signed events, recompute the links, and
+  `/verify` and the offline verifier still report `valid`; events removed from
+  the end need no re-linking at all. New events cannot be added this way:
+  each one needs a signature by the creator or a delegate for this proof.
+- That nothing follows a closing event. The API refuses events after
+  `proof.completed` or `proof.failed`, but the verifier uses neither the
+  closing event nor the export's `status`, so events written to the database
+  after a closing event, around the API, are not detected.
+- To check either, compare the exported events (for example their ordered
+  signatures) with a record kept outside the service. See
+  [PARITY.md](PARITY.md) and `docs/design/proof-closure.md`.
 
 ### Quickstart
 
