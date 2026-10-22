@@ -1,7 +1,7 @@
 # Proof closure and tail truncation (design)
 
 Status: **design approved (H4), not implemented.** See *Decisions* at the end
-(D-C1 to D-C10) and the plan in §8. Baseline for line references: commit
+(D-C1 to D-C12) and the plan in §8. Baseline for line references: commit
 `a1a9344`.
 
 Measurements in this document were taken in memory (SQLite `StaticPool`,
@@ -771,7 +771,7 @@ stays `"3"` in this slice.
 | File | Change |
 |---|---|
 | `app/canonical.py` | `REQUEST_TAG_V4`, `EVENT_TAG_V4`. `build_request_canonical_v4` / `parse_request_canonical_v4` (as v3, new tag). `build_event_canonical_v4(proof_id, type, payload_hash, nonce, prior_head)` / `parse_event_canonical_v4`. `prior_head` must be 64 lowercase hex, checked with fullmatch (D-R9); the D-R3 and D-R10 field rules apply. |
-| `app/crypto.py:884-907` | next to `hash_event_record`: a pure `chain_head(events)` over exported event dicts. It returns the link hash of the last event, or `None` for an empty list, using the same fields and `created_at` string as `create_event` (`app/events.py:60-70`, M16). |
+| `app/crypto.py:884-907` | next to `hash_event_record`: a pure `chain_head(events, *, proof_id)` over exported event dicts (`proof_id` is separate because exported events do not carry it, D-C11). It returns the link hash of the last event, or `None` for an empty list, using the same fields and `created_at` string as `create_event` (`app/events.py:60-70`, M16; D-C12). |
 | new `test_canonical_v4.py` | build/parse round trips; rejection of `\|`, control characters, empty fields, bad or upper-case `prior_head`, and v3 or untagged input. A v3 parser rejects a v4 canonical and the other way round. `chain_head` equals the `previous_event_hash` the API writes for the next event (M16), and is `None` for no events. |
 | optional `scripts/generate_canonical_v4_vectors.py`, `tests/fixtures/canonical_v4_vectors.json` | fixed vectors for the SDK parity test in B, as for v3 |
 
@@ -791,12 +791,15 @@ stays `"3"` in this slice.
 | `app/events.py` | no change: links stay H1 | D-C1 |
 | `flop_proof_sdk/canonical.py`, `flop_proof_sdk/__init__.py` | v4 copies and exports; parity test as `test_sdk_canonical_v3.py` | D-C1 |
 | `flop_proof_sdk/client.py:139-200` | `create_signed_proof` uses the v4 request tag. `append_signed_event(..., prior_head=None, retries=0)` reads `chain_head` when `prior_head` is not given. On 409 `head_mismatch` it raises a typed error (for example `FlopProofHeadMismatch`) carrying the current head. `retries` re-signs only non-closing types. | D-C4, D-C5 |
+| `flop_proof_sdk` (head computation) | the SDK's copy of `chain_head` follows D-C12: it takes `created_at` from the export as text, unchanged. A test locks this: the `created_at` string of an export gives the same head in the SDK as in `app/crypto.py`, including values with and without a fraction and `.500000` against `.5`. | D-C11, D-C12 |
 | `pyproject.toml:7` | `0.4.1` → `0.5.0` | — |
 | tests (§5.5, and the 13 files of §4 V1) | v4 tags. Every hand-built event gets the current head. Version assertions `"3"` → `"4"`. `test_v3_export_relabelled_as_v2_is_invalid` (`test_security_regression.py:1145`) adds 4↔3 relabelling. | D-C2 |
 | `test_security_regression.py` (re-linking block) | remove the strict-xfail marks: M9 and M10 fail on `prior_head_valid`, M13 on the position rule. Their helpers build v4 events. | D-C6, D-C7 |
 | new tests | §6, adapted to H4: 409 `head_mismatch` (concurrent appends, a stale head, 403 before 409); `prior_head_valid` on M9, M10, M11; tail truncation stays `valid` with `closed: false`; `--expect-head` / `--expect-count`; API/offline parity of the new fields; SDK typed error and `retries` (never for closing types) | D-C3 to D-C8 |
 | `scripts/e2e_client.py` | v4 request and events | D-C2 |
 | `README.md`, `PARITY.md`, `CHANGELOG.md` | README "What it verifies" / "does not verify" for v4. PARITY row → Fixed for v4 proofs, keeping tail truncation and rejected signed events (D-C10) as the documented limit and v1–v3 as before. CHANGELOG: proof version `"4"`, SDK 0.5.0. | D-C10 |
+| D-C11 | `chain_head(events, *, proof_id)`: exported events do not carry `proof_id`, so it is a separate, required parameter. | §8 A |
+| D-C12 | `chain_head` and the SDK use `created_at` as the exported text, as is: no re-parsing or re-formatting (`.500000` and `.5` give different heads). A `datetime` object is rejected. | §8 A, §8 B |
 
 ### C. Dashboard
 
@@ -820,7 +823,7 @@ Approved for implementation. Section numbers refer to this document.
 | D-C2 | Mandatory: new proofs are version `"4"`, with the tags `FLOP/REQUEST/v4` and `FLOP/EVENT/v4` (V1). D-R2 and D-R4 apply unchanged: old clients get 401 at `POST /proofs`. v1/v2/v3 proofs are verified by their own rules; a chain never mixes formats (D-R12). | §3.2.1, §4; §7 q1 |
 | D-C3 | A `prior_head` that does not match the current chain gets 409 `head_mismatch`. The check runs under the lock, after the existing checks, so 403 comes first. | §3.2.1, §3.3 |
 | D-C4 | On 409 `head_mismatch` the SDK raises a typed error carrying the current head. Automatic re-signing is opt-in (`retries=`) and never applies to `proof.completed` / `proof.failed`. | §3.2.1; §7 q14 |
-| D-C5 | `chain_head` is returned by `GET /proofs/{id}` and by every append response. | §3.2.1, §3.3; §7 q6, q15 |
+| D-C5 | `chain_head` is returned by `GET /proofs/{id}` and by every append response. It is computed with `chain_head(events, *, proof_id)` (D-C11). | §3.2.1, §3.3; §7 q6, q15 |
 | D-C6 | The verifier adds a per-event `prior_head_valid` (`null` for `request.created`); `false` makes the verdict `invalid`. New top-level fields: `closed`, `chain_head`, `event_count`; `events_checked` stays for compatibility. | §3.2.1, §3.4; §7 q5, q17 |
 | D-C7 | Position rule in every version: at most one closing event, and it must be the last event; otherwise `invalid`. | §3.4; §7 q11 |
 | D-C8 | Offline CLI `--expect-head` / `--expect-count`: they do not change `verdict`; a mismatch gives exit status 1 and an `expectations` field in the result. `/verify` does not take these parameters. | §3.5; §7 q7 |

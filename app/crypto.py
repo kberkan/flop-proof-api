@@ -907,6 +907,64 @@ def hash_event_record(
     )
 
 
+def chain_head(events: list[dict], *, proof_id: str) -> str | None:
+    """Link hash of the last event in `events`, or None for an empty list.
+
+    This is the value create_event (app/events.py) writes as the next event's
+    previous_event_hash, and the prior_head a version-4 event signs
+    (docs/design/proof-closure.md §3.2.1, D-C1, D-C5).
+
+    `events` are event dicts as exported by GET /proofs/{id} (or the /verify
+    event list), in sequence order. Only the last one is read, and only these
+    keys: event_id, type, actor_did, payload_hash, canonical, signature,
+    created_at, sequence. payload, nonce and previous_event_hash are not part
+    of the link. created_at must be the exported string as is (for example
+    "2026-10-22T19:10:38.014507", no offset); the server hashes the same
+    string (M16). This function does not check the chain itself.
+
+    DESIGN GAP: the design names this chain_head(events), but exported events
+    do not carry proof_id (it is a proof-level field of the export), while the
+    link hash covers it. proof_id is therefore a required keyword argument.
+    """
+    if not isinstance(events, list):
+        raise ValueError("events: must be a list")
+    if not events:
+        return None
+    last = events[-1]
+    if not isinstance(last, dict):
+        raise ValueError("events: last event must be an object")
+    missing = [
+        key
+        for key in (
+            "event_id",
+            "type",
+            "actor_did",
+            "payload_hash",
+            "canonical",
+            "signature",
+            "created_at",
+            "sequence",
+        )
+        if key not in last
+    ]
+    if missing:
+        raise ValueError(f"events: last event is missing {', '.join(missing)}")
+    if not isinstance(last["created_at"], str):
+        # A datetime would be hashed differently from the exported string.
+        raise ValueError("events: created_at must be the exported string")
+    return hash_event_record(
+        event_id=last["event_id"],
+        proof_id=proof_id,
+        event_type=last["type"],
+        actor_did=last["actor_did"],
+        payload_hash=last["payload_hash"],
+        canonical=last["canonical"],
+        signature=last["signature"],
+        created_at=last["created_at"],
+        sequence=last["sequence"],
+    )
+
+
 def canonical_signed_message(
     room: str,
     nonce: str,
