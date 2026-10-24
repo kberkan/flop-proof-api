@@ -94,7 +94,7 @@
   `scripts/run_tests.sh` builds its test database with the migrations, and
   `test_migrations.py` checks that they produce the schema of `app/models.py`.
 
-## [0.5.0] - unreleased
+## [0.5.0] - 2026-10-24
 
 The SDK for version-4 proofs. The API change it follows is listed under
 [Unreleased]; SDK 0.4.x cannot create proofs against that API.
