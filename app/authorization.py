@@ -37,6 +37,10 @@ REASONS: dict[str, tuple[int, str]] = {
     "invalid_delegate_did": (400, "Invalid delegate DID"),
     "invalid_delegates": (400, "Invalid delegate list"),
     "result_already_created": (409, "result.created already exists for this proof"),
+    # Version-4 proofs (docs/design/proof-closure.md D-C3): the signed
+    # prior_head is not the head of the chain read under the lock. Not an
+    # authorization rule; kept here with the other event rejections.
+    "head_mismatch": (409, "Event prior_head does not match the current chain"),
 }
 
 

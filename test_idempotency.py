@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 import os
 
 from app.main import app
-from app.canonical import build_request_canonical_v3
+from app.canonical import build_request_canonical_v4
 from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
 client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-test-key-2026")})
@@ -14,7 +14,7 @@ client = TestClient(app, headers={"X-API-Key": os.getenv("FLOP_API_KEY", "flop-t
 def make_request(private_key, did, request_id, text="idempotency test"):
     nonce = f"nonce-{uuid.uuid4().hex}"
     room = "idempotency-room"
-    canonical = build_request_canonical_v3(room, nonce, text)
+    canonical = build_request_canonical_v4(room, nonce, text)
 
     signature = sign_message(
         private_key,

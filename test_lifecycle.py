@@ -11,7 +11,7 @@ from app.crypto import (
     sign_message,
     sha256_json,
 )
-from app.canonical import build_event_canonical_v3, build_request_canonical_v3
+from app.canonical import build_event_canonical_v4, build_request_canonical_v4
 from app.main import app
 
 
@@ -29,7 +29,7 @@ def create_signed_proof():
 
     text = "lifecycle test"
     nonce = "lifecycle-nonce"
-    canonical = build_request_canonical_v3("room-1", nonce, text)
+    canonical = build_request_canonical_v4("room-1", nonce, text)
 
     signature = sign_message(
         private_key,
@@ -66,7 +66,9 @@ def signed_event(
     nonce,
 ):
     payload_hash = sha256_json(payload)
-    canonical = build_event_canonical_v3(proof_id, event_type, payload_hash, nonce)
+    # Version 4: the event signs the proof's current chain head (D-C1).
+    prior_head = client.get(f"/proofs/{proof_id}").json()["chain_head"]
+    canonical = build_event_canonical_v4(proof_id, event_type, payload_hash, nonce, prior_head)
 
     signature = sign_message(
         private_key,
@@ -81,6 +83,7 @@ def signed_event(
             "nonce": nonce,
             "sig": signature,
             "canonical": canonical,
+            "prior_head": prior_head,
         },
     }
 

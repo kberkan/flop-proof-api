@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
-from app.canonical import build_request_canonical_v3
+from app.canonical import build_request_canonical_v4
 from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -80,7 +80,7 @@ def _schema(database: Path) -> dict:
 def _signed_proof_request() -> dict:
     private_key, public_key = generate_test_keypair()
     nonce = f"migration-{uuid.uuid4().hex}"
-    canonical = build_request_canonical_v3("migration-room", nonce, "first proof")
+    canonical = build_request_canonical_v4("migration-room", nonce, "first proof")
     return {
         "request": {
             "request_id": f"migration-{uuid.uuid4().hex}",

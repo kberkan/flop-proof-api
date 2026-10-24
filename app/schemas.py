@@ -51,6 +51,11 @@ class EventSignatureSchema(BaseModel):
     nonce: str = Field(min_length=1)
     sig: str = Field(min_length=1)
     canonical: str = Field(min_length=1)
+    # The chain head the event signs (docs/design/proof-closure.md D-C1).
+    # Required for version-4 proofs and refused for v1/v2/v3 proofs; both are
+    # checked by the events endpoint, which knows the proof's version. Its
+    # format (64 lowercase hex) is checked by the v4 canonical builder.
+    prior_head: str | None = None
 
 
 class EventCreate(BaseModel):

@@ -18,6 +18,7 @@ import pytest
 
 from app.canonical import (
     CURRENT_PROOF_VERSION,
+    V3_PROOF_VERSION,
     EVENT_TAG,
     EVENT_TAG_V4,
     REQUEST_TAG,
@@ -57,9 +58,11 @@ def test_formats_match_the_design():
     )
 
 
-def test_v3_is_still_current_and_unchanged():
-    """§8 A: the v4 functions exist but are not active; B switches over."""
-    assert CURRENT_PROOF_VERSION == "3"
+def test_v4_is_current_and_v3_unchanged():
+    """Was test_v3_is_still_current_and_unchanged (§8 A); since §8 B new
+    proofs are version 4 (D-C2) and the v3 formats stay as they were."""
+    assert CURRENT_PROOF_VERSION == "4"
+    assert V3_PROOF_VERSION == "3"
     assert (REQUEST_TAG, EVENT_TAG) == ("FLOP/REQUEST/v3", "FLOP/EVENT/v3")
 
 
@@ -556,14 +559,14 @@ def api(monkeypatch):
 def test_chain_head_from_the_export_equals_the_next_previous_event_hash(api):
     """Before every append, chain_head over GET /proofs/{id} must equal the
     previous_event_hash the API then writes for the new event (§8 A, M16).
-    The proof is version 3 (CURRENT_PROOF_VERSION); the link does not depend
-    on the version."""
+    The proof is version 4, so each event also signs that head; the API
+    accepting it (201) shows the API computes the same value under its lock."""
     from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
     key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
     request_nonce = f"n-{uuid.uuid4().hex}"
-    request_canonical = build_request_canonical_v3("room-v4", request_nonce, "chain head")
+    request_canonical = build_request_canonical_v4("room-v4", request_nonce, "chain head")
     created = api.post("/proofs", json={"request": {
         "request_id": f"req-{uuid.uuid4().hex}",
         "from_did": did,
@@ -589,18 +592,24 @@ def test_chain_head_from_the_export_equals_the_next_previous_event_hash(api):
         exported = api.get(f"/proofs/{proof_id}").json()
         head = chain_head(exported["events"], proof_id=proof_id)
         nonce = f"n-{index}"
-        canonical = build_event_canonical_v3(proof_id, event_type, sha256_json(payload), nonce)
+        canonical = build_event_canonical_v4(proof_id, event_type, sha256_json(payload), nonce, head)
         response = api.post(f"/proofs/{proof_id}/events", json={
             "type": event_type,
             "actor_did": did,
             "payload": payload,
-            "signature": {"nonce": nonce, "canonical": canonical, "sig": sign_message(key, canonical.encode())},
+            "signature": {
+                "nonce": nonce,
+                "canonical": canonical,
+                "sig": sign_message(key, canonical.encode()),
+                "prior_head": head,
+            },
         })
         assert response.status_code == 201, response.text
         written = api.get(f"/proofs/{proof_id}").json()["events"][-1]
         rows.append((exported["events"][-1]["created_at"], head, written["previous_event_hash"]))
         assert written["sequence"] == len(exported["events"]) + 1
         assert head == written["previous_event_hash"], (event_type, exported["events"][-1]["created_at"])
+        assert head == exported["chain_head"]
 
     final = api.get(f"/proofs/{proof_id}").json()["events"]
     created_at = [event["created_at"] for event in final]

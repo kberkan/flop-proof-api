@@ -22,7 +22,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.canonical import build_event_canonical_v3, build_request_canonical_v3
+from app.canonical import (
+    build_event_canonical_v3,
+    build_event_canonical_v4,
+    build_request_canonical_v3,
+    build_request_canonical_v4,
+)
 from app.crypto import generate_test_keypair, public_key_to_test_did, sha256_json, sign_message
 from app.main import app
 
@@ -119,7 +124,7 @@ def client(monkeypatch):
 
 def _post_proof(client, sig=None, from_did=SIGNER_DID):
     nonce = f"n-{uuid.uuid4().hex}"
-    canonical = build_request_canonical_v3("room", nonce, "text")
+    canonical = build_request_canonical_v4("room", nonce, "text")
     signature = sign_message(SIGNER_KEY, canonical.encode()) if sig is None else sig(canonical.encode())
     return client.post(
         "/proofs",
@@ -137,7 +142,8 @@ def _post_proof(client, sig=None, from_did=SIGNER_DID):
 
 def _post_event(client, proof_id, sig=None, actor_did=SIGNER_DID):
     nonce = f"e-{uuid.uuid4().hex}"
-    canonical = build_event_canonical_v3(proof_id, "agent.started", sha256_json({}), nonce)
+    head = client.get(f"/proofs/{proof_id}").json()["chain_head"]
+    canonical = build_event_canonical_v4(proof_id, "agent.started", sha256_json({}), nonce, head)
     signature = sign_message(SIGNER_KEY, canonical.encode()) if sig is None else sig(canonical.encode())
     return client.post(
         f"/proofs/{proof_id}/events",
@@ -145,7 +151,7 @@ def _post_event(client, proof_id, sig=None, actor_did=SIGNER_DID):
             "type": "agent.started",
             "actor_did": actor_did,
             "payload": {},
-            "signature": {"nonce": nonce, "sig": signature, "canonical": canonical},
+            "signature": {"nonce": nonce, "sig": signature, "canonical": canonical, "prior_head": head},
         },
     )
 
@@ -218,7 +224,8 @@ def test_event_canonical_mismatch_is_still_checked_before_the_signature(client, 
             "type": "agent.started",
             "actor_did": SIGNER_DID,
             "payload": {},
-            "signature": {"nonce": "n-1", "sig": "!!!", "canonical": "FLOP/EVENT/v3|other"},
+            # A well-formed prior_head, so the canonical check is what fails.
+            "signature": {"nonce": "n-1", "sig": "!!!", "canonical": "FLOP/EVENT/v4|other", "prior_head": "0" * 64},
         },
     )
 
@@ -350,7 +357,9 @@ def test_did_key_to_public_key_still_accepts_a_normal_key():
 
 def _write_chain_around_api(client, actor_did, signature):
     """A version-3 proof with request.created and result.created by `actor_did`,
-    written straight to the database (bypassing the API's input checks)."""
+    written straight to the database (bypassing the API's input checks). Kept
+    on version 3 on purpose: the chain is only a carrier for the signer check,
+    and v3 events need no chain head."""
     from datetime import datetime, timezone
 
     from app.database import get_db
@@ -415,20 +424,26 @@ def test_verifier_still_accepts_a_normal_proof(client, proof_id):
 SMALL_ORDER_DELEGATE = _did_key(ED25519 + b"\x01" + bytes(31))
 
 
-def _signed_delegation(proof_id, delegates):
+def _signed_delegation(client, proof_id, delegates):
     payload = {"delegates": delegates}
     nonce = f"d-{uuid.uuid4().hex}"
-    canonical = build_event_canonical_v3(proof_id, "task.delegated", sha256_json(payload), nonce)
+    head = client.get(f"/proofs/{proof_id}").json()["chain_head"]
+    canonical = build_event_canonical_v4(proof_id, "task.delegated", sha256_json(payload), nonce, head)
     return {
         "type": "task.delegated",
         "actor_did": SIGNER_DID,
         "payload": payload,
-        "signature": {"nonce": nonce, "sig": sign_message(SIGNER_KEY, canonical.encode()), "canonical": canonical},
+        "signature": {
+            "nonce": nonce,
+            "sig": sign_message(SIGNER_KEY, canonical.encode()),
+            "canonical": canonical,
+            "prior_head": head,
+        },
     }
 
 
 def test_delegating_to_a_small_order_did_is_400(client, proof_id):
-    response = client.post(f"/proofs/{proof_id}/events", json=_signed_delegation(proof_id, [SMALL_ORDER_DELEGATE]))
+    response = client.post(f"/proofs/{proof_id}/events", json=_signed_delegation(client, proof_id, [SMALL_ORDER_DELEGATE]))
 
     assert response.status_code == 400, response.text
     assert response.json() == {"detail": "Invalid delegate DID"}
@@ -441,7 +456,7 @@ def test_verifier_treats_a_delegation_to_a_small_order_did_as_unauthorized(clien
     from app.events import create_event
     from app.verifier import verify_proof_data
 
-    event = _signed_delegation(proof_id, [SMALL_ORDER_DELEGATE])
+    event = _signed_delegation(client, proof_id, [SMALL_ORDER_DELEGATE])
     db = next(app.dependency_overrides[get_db]())
     create_event(db=db, proof_id=proof_id, event_type=event["type"], actor_did=event["actor_did"],
                  payload=event["payload"], canonical=event["signature"]["canonical"],

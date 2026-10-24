@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.canonical import build_event_canonical_v3, build_request_canonical_v3
+from app.canonical import build_event_canonical_v3, build_event_canonical_v4, build_request_canonical_v3, build_request_canonical_v4
 from app.verifier import verify_proof_file, verify_proof_data
 
 
@@ -60,7 +60,7 @@ def proof_file(tmp_path, monkeypatch):
 
         nonce = f"verifier-nonce-{uuid.uuid4().hex}"
         text = "proof created for test_verifier"
-        canonical = build_request_canonical_v3("verifier-room", nonce, text)
+        canonical = build_request_canonical_v4("verifier-room", nonce, text)
         created = client.post(
             "/proofs",
             json={
@@ -82,8 +82,9 @@ def proof_file(tmp_path, monkeypatch):
 
         def append_event(event_type, payload):
             event_nonce = f"verifier-event-{uuid.uuid4().hex}"
-            event_canonical = build_event_canonical_v3(
-                proof_id, event_type, sha256_json(payload), event_nonce
+            head = client.get(f"/proofs/{proof_id}").json()["chain_head"]
+            event_canonical = build_event_canonical_v4(
+                proof_id, event_type, sha256_json(payload), event_nonce, head
             )
             response = client.post(
                 f"/proofs/{proof_id}/events",
@@ -95,6 +96,7 @@ def proof_file(tmp_path, monkeypatch):
                         "nonce": event_nonce,
                         "sig": sign_message(private_key, event_canonical.encode("utf-8")),
                         "canonical": event_canonical,
+                        "prior_head": head,
                     },
                 },
             )
@@ -255,6 +257,10 @@ def _build_signed_result_event(payload):
     Event authorization (docs/design/event-authorization.md, D-A7/D-A10)
     makes a chain without a sequence-1 request.created invalid, so the
     result alone is no longer a complete proof.
+
+    Kept in the version-3 format on purpose (the callers verify it as
+    version "3"): the tests are about result fields, and a hand-built v3
+    chain needs no signed chain head.
     """
     from app.crypto import (
         generate_test_keypair,

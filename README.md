@@ -10,7 +10,7 @@ against the FLOP Yellow Paper wire formats.
 > [flop-labs/yellowpaper](https://github.com/flop-labs/yellowpaper).
 
 [![Tests](https://github.com/kberkan/flop-proof-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/kberkan/flop-proof-api/actions/workflows/tests.yml)
-· SDK [0.4.1](https://github.com/kberkan/flop-proof-api/releases/tag/sdk-v0.4.1)
+· SDK [0.5.0](https://github.com/kberkan/flop-proof-api/releases/tag/sdk-v0.5.0)
 · per-feature status and parity: [PARITY.md](PARITY.md)
 · [CHANGELOG.md](CHANGELOG.md)
 
@@ -21,12 +21,20 @@ JSON file without running the service.
 ### What it verifies
 
 - Each proof request and event is Ed25519-signed by a `did:key` actor over a
-  domain-tagged message (`FLOP/REQUEST/v3|…`, `FLOP/EVENT/v3|…`). The API
+  domain-tagged message (`FLOP/REQUEST/v4|…`, `FLOP/EVENT/v4|…`). The API
   rejects bad signatures; `/verify` and the offline verifier re-check them.
 - Each event's payload hash and signature are re-checked, so a change to an
-  event's signed content (type, payload, nonce) is detected. Events are
-  numbered and hash-linked; the links detect a removed or reordered event only
-  if they were not recomputed (see below).
+  event's signed content (type, payload, nonce) is detected.
+- In version-4 proofs (all new proofs) each event also signs the chain head
+  it was appended to (`prior_head`, the link hash of the event before it). An
+  event removed from the middle of a proof, or events put in another order,
+  are detected even if the links were recomputed: the next event's signed
+  head no longer matches (`prior_head_valid`). This holds for open and closed
+  proofs. Two writers that sign the same head cannot both append: the second
+  gets 409 and signs again on the new head.
+- At most one closing event (`proof.completed` / `proof.failed`), and it is
+  the last event, in every proof version: an event written to the database
+  after it, around the API, makes the proof `invalid`.
 - Only the proof's creator, or a DID the creator delegated to in a signed
   `task.delegated` event, can add events, and a signed event cannot be replayed
   within its proof.
@@ -51,20 +59,22 @@ JSON file without running the service.
 - Parity with a live FLOP runtime. Items marked UNVERIFIED in
   [PARITY.md](PARITY.md) (for example `model_hash`, `output_hash`,
   DecodePolicy) are checked only by this repository's tests.
-- That a proof's events are complete and in their original order. The chain
-  hash (`previous_event_hash`) uses no key, and signatures do not cover an
-  event's position, `sequence` or `created_at`. Anyone holding an export (or
-  the database) can remove or reorder signed events, recompute the links, and
-  `/verify` and the offline verifier still report `valid`; events removed from
-  the end need no re-linking at all. New events cannot be added this way:
-  each one needs a signature by the creator or a delegate for this proof.
-- That nothing follows a closing event. The API refuses events after
-  `proof.completed` or `proof.failed`, but the verifier uses neither the
-  closing event nor the export's `status`, so events written to the database
-  after a closing event, around the API, are not detected.
-- To check either, compare the exported events (for example their ordered
-  signatures) with a record kept outside the service. See
-  [PARITY.md](PARITY.md) and `docs/design/proof-closure.md`.
+- That a proof is complete at its end. Removing the last events, the closing
+  event included, leaves a chain that once existed: `/verify` and the offline
+  verifier report it `valid` with `closed: false`, like a proof that was never
+  closed. The same holds for an event the API rejected after checking its
+  signature (for example a 409 on a stale head): whoever saw it can put it at
+  its position and drop everything after it. To detect this, keep the
+  `chain_head` (or the event count) from the last append response and check an
+  export with `python -m app.verifier proof.json --expect-head HEX`; see
+  "Offline verifier" below.
+- Order and completeness of version 1–3 proofs. Their events sign no chain
+  head, and the chain hash (`previous_event_hash`) uses no key, so anyone
+  holding an export (or the database) can remove or reorder their signed
+  events, recompute the links, and the proof still verifies `valid`. New events
+  cannot be added this way: each needs a signature by the creator or a
+  delegate for that proof.
+- See [PARITY.md](PARITY.md) and `docs/design/proof-closure.md`.
 
 ### Quickstart
 
@@ -87,7 +97,7 @@ save the script below as `quickstart.py`:
 
 ```sh
 python3 -m venv sdk-env
-sdk-env/bin/pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.1/flop_proof_sdk-0.4.1-py3-none-any.whl
+sdk-env/bin/pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.5.0/flop_proof_sdk-0.5.0-py3-none-any.whl
 ```
 
 ```python
@@ -157,7 +167,7 @@ Evidence accepted or validated by the FLOP Proof API does not, by itself, provid
 - STARK proof execution or verification merely because STARK evidence was accepted
 - Runtime settlement or execution verification merely because validator attestations were accepted
 - Execution verification, settlement, or credit merely because `accepted=true`
-- Event authorship beyond the proof's own delegation rule: the API accepts an event only from the proof's creator or from a DID the creator delegated to in a signed `task.delegated` event, and `/verify` checks the same rule. It does not offer revocation (a delegation cannot be withdrawn) or sub-delegation. Replay of a signed event is rejected within its own proof (version-3 proofs sign the nonce; version 1/2 proofs reject a repeated signature, see `docs/design/event-replay.md`); this is API-side protection, not FLOP runtime ProcessedTasks state
+- Event authorship beyond the proof's own delegation rule: the API accepts an event only from the proof's creator or from a DID the creator delegated to in a signed `task.delegated` event, and `/verify` checks the same rule. It does not offer revocation (a delegation cannot be withdrawn) or sub-delegation. Replay of a signed event is rejected within its own proof (version-3 and version-4 proofs sign the nonce; version 1/2 proofs reject a repeated signature, see `docs/design/event-replay.md`); this is API-side protection, not FLOP runtime ProcessedTasks state
 
 **Test/parity boundary:** `IMPLEMENTED (internal-test-verified)` describes behavior validated by the API's own test suite; it does not mean independently verified byte-level parity with the FLOP runtime. External parity status is classified separately in `PARITY.md`.
 
@@ -235,7 +245,7 @@ POST /validator-attestations/accept
 
 Install the wheel from the GitHub Release:
 
-pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.1/flop_proof_sdk-0.4.1-py3-none-any.whl
+pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.5.0/flop_proof_sdk-0.5.0-py3-none-any.whl
 
 Each release (tag `sdk-vX.Y.Z`) also carries the sdist and a `SHA256SUMS`
 file. To verify a download, fetch the wheel and `SHA256SUMS` from the same
@@ -244,7 +254,7 @@ release into one directory and run `sha256sum -c --ignore-missing SHA256SUMS`.
 Install from source instead (only the `flop_proof_sdk` package is installed;
 `app/` is not part of it):
 
-pip install "git+https://github.com/kberkan/flop-proof-api.git@sdk-v0.4.1"
+pip install "git+https://github.com/kberkan/flop-proof-api.git@sdk-v0.5.0"
 
 or, in a checkout: `pip install .`
 
@@ -260,8 +270,10 @@ print(client.health())
 
 client.create_signed_proof(...)
 
-The SDK signs the version-3 request message `FLOP/REQUEST/v3|room|nonce|text`.
-`POST /proofs` accepts only this format and creates version `"3"` proofs.
+The SDK signs the version-4 request message `FLOP/REQUEST/v4|room|nonce|text`.
+`POST /proofs` accepts only this format and creates version `"4"` proofs; a
+version-3 or untagged request gets 401 and no proof is created. SDK 0.4.x and
+earlier cannot create proofs any more: use 0.5.0.
 `created_at` must be a timezone-aware ISO 8601 date-time string, e.g.
 `datetime.now(timezone.utc).isoformat()` or `"2026-10-06T12:00:00Z"`.
 
@@ -269,12 +281,31 @@ The SDK signs the version-3 request message `FLOP/REQUEST/v3|room|nonce|text`.
 
 client.append_signed_event(...)
 
-The SDK signs the version-3 event message
-`FLOP/EVENT/v3|proof_id|type|payload_hash|nonce`, so the nonce is signed.
-`room`, `nonce` and `type` must not contain `|` or control characters; `text`
-is free. Proofs created before version 3 keep the old formats
-(`room|nonce|text`, `proof_id|type|payload_hash`). SDK 0.3.0 and later sign only the
-version-3 formats. See `docs/design/event-replay.md`.
+The SDK signs the version-4 event message
+`FLOP/EVENT/v4|proof_id|type|payload_hash|nonce|prior_head`: the nonce and the
+chain head the event is appended to are signed, and `prior_head` is also sent
+as `signature.prior_head`. `room`, `nonce` and `type` must not contain `|` or
+control characters; `text` is free; `prior_head` is 64 lowercase hex
+characters.
+
+- Without `prior_head=`, `append_signed_event` calls `client.current_head(proof_id)`:
+  it reads `GET /proofs/{id}`, computes the head from the exported events
+  itself (with `created_at` exactly as exported) and compares it with the
+  export's `chain_head`. If they differ it raises `FlopProofChainError` and
+  signs nothing. This catches an inconsistent answer, not a server that
+  consistently serves a shortened chain.
+- If another writer appended first, the API answers 409 and the SDK raises
+  `HeadMismatchError` with `signed_head` and `current_head`. With
+  `retries=N` it signs again on the new head, up to N times, except for
+  `proof.completed` and `proof.failed`, which are never re-signed
+  automatically.
+- Every append response carries `chain_head`, the head after that event.
+
+Open proofs created before version 4 keep their own formats (version 3:
+`FLOP/EVENT/v3|…` without `prior_head`; versions 1/2: `room|nonce|text`,
+`proof_id|type|payload_hash`); the API refuses `prior_head` on them. SDK 0.5.0
+signs only the version-4 formats. See `docs/design/proof-closure.md` and
+`docs/design/event-replay.md`.
 
 ## Evidence submission
 
@@ -298,6 +329,16 @@ verification = client.verify_proof(proof_id)
 
 python -m app.verifier /path/to/proof.json
 
+python -m app.verifier /path/to/proof.json --expect-head HEX --expect-count N
+
+The output lists each event, whether the proof is closed, and its chain head.
+`--expect-head` and `--expect-count` compare the export with a `chain_head`
+and an event count kept outside the service (for example from the last append
+response). They do not change the verdict, which is about the export's own
+consistency; a mismatch prints `Expected head: MISMATCH` (or `Expected count:
+MISMATCH`) and exits 1. This is the way to notice an export whose last events
+were removed.
+
 ## Tests
 
 scripts/run_tests.sh -q
@@ -308,7 +349,7 @@ environment, and removes both afterwards; extra arguments go to pytest. It
 refuses to start if 127.0.0.1:8000 is already in use. Running `pytest` without
 the script uses `./proofs.db` and may write test data to it.
 
-Current regression status: **849 passed**
+Current regression status: **1129 passed**
 
 ## Test vectors
 
@@ -365,7 +406,7 @@ These boundaries are tracked in `PARITY.md`.
 
 ## Package
 
-Version: 0.4.1
+Version: 0.5.0
 
 Build with: python -m build (local builds go to `dist/`, which is not tracked).
 Releases are built and published by `.github/workflows/release-sdk.yml` when a

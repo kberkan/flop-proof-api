@@ -2,9 +2,9 @@
 
     FLOP_API_KEY=... python scripts/e2e_client.py
 
-Talks to http://127.0.0.1:8000, creates a signed proof, appends events, writes
-the exported proof to /tmp/flop-proof.json and an artifact under /tmp, and
-verifies it. Run it against a disposable server: it writes to that server's
+Talks to http://127.0.0.1:8000, creates a signed version-4 proof, appends
+events that each sign the current chain head, writes the exported proof to
+/tmp/flop-proof.json and an artifact under /tmp, and verifies it. Run it against a disposable server: it writes to that server's
 database.
 """
 
@@ -24,8 +24,8 @@ from app.crypto import (  # noqa: E402
 )
 from flop_proof_sdk import (  # noqa: E402
     FlopProofClient,
-    build_event_canonical_v3,
-    build_request_canonical_v3,
+    build_event_canonical_v4,
+    build_request_canonical_v4,
 )
 
 
@@ -54,7 +54,7 @@ def main():
 
     nonce = f"client-sdk-nonce-{uuid.uuid4().hex}"
     text = "proof created through Python SDK"
-    canonical = build_request_canonical_v3("client-sdk", nonce, text)
+    canonical = build_request_canonical_v4("client-sdk", nonce, text)
     signature = sign_message(
         private_key,
         canonical.encode("utf-8"),
@@ -79,8 +79,10 @@ def main():
 
     def append_event(event_type, payload):
         event_nonce = f"client-sdk-event-{uuid.uuid4().hex}"
-        event_canonical = build_event_canonical_v3(
-            proof_id, event_type, payload_hash(payload), event_nonce
+        # Version 4 (D-C1): sign the head the SDK read and checked.
+        head = client.current_head(proof_id)
+        event_canonical = build_event_canonical_v4(
+            proof_id, event_type, payload_hash(payload), event_nonce, head
         )
         event_signature = sign_message(
             private_key,
@@ -95,11 +97,13 @@ def main():
                 "nonce": event_nonce,
                 "sig": event_signature,
                 "canonical": event_canonical,
+                "prior_head": head,
             },
         }
 
         result = client.append_event(proof_id, event)
-        print(f"   {event_type}: {result['event_id']}")
+        print(f"   {event_type}: {result['event_id']} (head {result['chain_head'][:16]}…)")
+        return result
 
     print("3. APPEND EVENTS")
 
@@ -145,11 +149,17 @@ def main():
         },
     )
 
+    # The SDK's own helper: reads and checks the head, signs and appends.
+    closed = client.append_signed_event(proof_id, private_key, did, "proof.completed", {}, f"client-sdk-close-{uuid.uuid4().hex}")
+    print(f"   proof.completed: {closed['event_id']} (head {closed['chain_head'][:16]}…)")
+
     print("4. GET PROOF")
     proof = client.get_proof(proof_id)
 
     assert proof["proof_id"] == proof_id
-    assert len(proof["events"]) == 4
+    assert proof["version"] == "4"
+    assert len(proof["events"]) == 5
+    assert proof["chain_head"] == closed["chain_head"]
 
     with open("/tmp/flop-proof.json", "w", encoding="utf-8") as f:
         json.dump(proof, f, ensure_ascii=False, indent=2)
@@ -161,9 +171,12 @@ def main():
 
     print(f"   Verdict: {verification['verdict']}")
     print(f"   Events checked: {verification['events_checked']}")
+    print(f"   Closed: {verification['closed']}, chain head: {verification['chain_head']}")
 
     assert verification["verdict"] == "valid"
-    assert verification["events_checked"] == 4
+    assert verification["events_checked"] == verification["event_count"] == 5
+    assert verification["closed"] is True
+    assert verification["chain_head"] == closed["chain_head"]
     assert verification["result_hash_valid"] is True
     assert verification["artifact_hash_valid"] is True
 
@@ -173,6 +186,7 @@ def main():
         assert check["payload_hash_valid"] is True
         assert check["canonical_valid"] is True
         assert check["signature_valid"] is True
+        assert check["prior_head_valid"] is (None if check["type"] == "request.created" else True)
 
     print()
     print("PYTHON CLIENT SDK E2E: PASS")

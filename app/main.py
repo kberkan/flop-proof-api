@@ -18,6 +18,7 @@ from .crypto import (
     MockValidatorRegistry,
     ProcessedTasks,
     ValidatorAttestation,
+    chain_head,
     hash_event_record,
     sha256_bytes,
     sha256_json,
@@ -31,10 +32,12 @@ from .crypto import (
 from .canonical import (
     CURRENT_PROOF_VERSION,
     LEGACY_PROOF_VERSIONS,
-    REQUEST_TAG,
+    REQUEST_TAG_V4,
     TAG_PREFIX,
+    V3_PROOF_VERSION,
     build_event_canonical_v3,
-    parse_request_canonical_v3,
+    build_event_canonical_v4,
+    parse_request_canonical_v4,
 )
 from .replay import claim_processed_task
 from .database import Base, engine, get_db
@@ -570,16 +573,17 @@ def create_proof(
     signed_request = request.request
     canonical = signed_request.signature.canonical
 
-    # Only version-3 requests are accepted (D-R4): an untagged request is
-    # rejected here, before any proof is written. 401 like every other
-    # request-signature failure; the detail names the expected format so an
-    # old client can tell it must upgrade (the format is public).
+    # Only version-4 requests are accepted (D-R4, proof-closure.md D-C2): a
+    # version-3 or untagged request is rejected here, before any proof is
+    # written. 401 like every other request-signature failure; the detail
+    # names the expected format so an old client can tell it must upgrade
+    # (the format is public).
     try:
-        _, canonical_nonce, canonical_text = parse_request_canonical_v3(canonical)
+        _, canonical_nonce, canonical_text = parse_request_canonical_v4(canonical)
     except ValueError as exc:
         raise HTTPException(
             status_code=401,
-            detail=f"Invalid request canonical, expected {REQUEST_TAG}|room|nonce|text ({exc})",
+            detail=f"Invalid request canonical, expected {REQUEST_TAG_V4}|room|nonce|text ({exc})",
         )
 
     # Malformed signature or DID is 422, checked before any verification; a
@@ -757,10 +761,47 @@ def append_event(
 
     payload_hash = sha256_json(event.payload)
 
-    # D-R12: a chain never mixes formats. Version-3 proofs take only the
-    # tagged event canonical, whose signed nonce must be the submitted one;
-    # v1/v2 proofs take only the old one.
+    # D-R12: a chain never mixes formats. Version-4 proofs take only the v4
+    # event canonical, which signs the nonce and the chain head
+    # (proof-closure.md D-C1); version-3 proofs only the v3 one, whose signed
+    # nonce must be the submitted one; v1/v2 proofs only the old one.
+    prior_head = event.signature.prior_head
+
     if proof.version == CURRENT_PROOF_VERSION:
+        if prior_head is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid event field (prior_head: required for version-4 proofs)",
+            )
+        try:
+            expected_canonical = build_event_canonical_v4(
+                proof_id,
+                event.type,
+                payload_hash,
+                event.signature.nonce,
+                prior_head,
+            )
+        except ValueError as exc:
+            # type, nonce or prior_head breaks D-R3/D-R9/D-R10; malformed.
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid event field ({exc})",
+            )
+    elif prior_head is not None and (
+        proof.version == V3_PROOF_VERSION or proof.version in LEGACY_PROOF_VERSIONS
+    ):
+        # A v1/v2/v3 event has no prior_head; accepting the field would let a
+        # client believe it signed one. 400 like the other malformed event
+        # fields above: nothing about the signature or the chain was checked
+        # yet. The v1/v2/v3 paths below are otherwise unchanged (D-R12).
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid event field (prior_head: not part of version-"
+                f"{proof.version} events)"
+            ),
+        )
+    elif proof.version == V3_PROOF_VERSION:
         try:
             expected_canonical = build_event_canonical_v3(
                 proof_id,
@@ -885,6 +926,15 @@ def append_event(
         status_code, detail = REASONS[single_result_error]
         raise HTTPException(status_code=status_code, detail=detail)
 
+    # D-C3: last check under the lock. The signed prior_head must be the head
+    # of the chain this event is appended to, which is also the
+    # previous_event_hash create_event writes for it.
+    if proof.version == CURRENT_PROOF_VERSION and prior_head != chain_head(
+        [_link_fields(stored) for stored in chain[-1:]], proof_id=proof_id
+    ):
+        status_code, detail = REASONS["head_mismatch"]
+        raise HTTPException(status_code=status_code, detail=detail)
+
     created = create_event(
         db=db,
         proof_id=proof_id,
@@ -917,6 +967,25 @@ def append_event(
         "payload_hash": created.payload_hash,
         "created_at": created.created_at,
         "sequence": created.sequence,
+        # D-C5: the head after this event. Computed after the refresh: before
+        # it, created_at is the in-memory aware datetime, whose isoformat
+        # ("+00:00") differs from the stored value every later link uses.
+        "chain_head": chain_head([_link_fields(created)], proof_id=proof_id),
+    }
+
+
+def _link_fields(stored: ProofEvent) -> dict:
+    """The fields chain_head reads, from a stored event, with created_at as
+    the string the export carries and create_event hashes (D-C12)."""
+    return {
+        "event_id": stored.event_id,
+        "type": stored.event_type,
+        "actor_did": stored.actor_did,
+        "payload_hash": stored.payload_hash,
+        "canonical": stored.canonical,
+        "signature": stored.signature,
+        "created_at": stored.created_at.isoformat(),
+        "sequence": stored.sequence,
     }
 
 
@@ -949,6 +1018,9 @@ def get_proof(
         "status": proof.status,
         "created_at": proof.created_at,
         "updated_at": proof.updated_at,
+        # D-C5: the head a version-4 event must sign next; for every version
+        # the link hash of the last event (null without events).
+        "chain_head": chain_head([_link_fields(event) for event in events[-1:]], proof_id=proof_id),
         "events": [
             {
                 "event_id": event.event_id,

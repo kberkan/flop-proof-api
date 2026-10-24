@@ -1,6 +1,6 @@
 # Proof closure and tail truncation (design)
 
-Status: **design approved (H4), not implemented.** See *Decisions* at the end
+Status: **implemented (dashboard pending, §8 C).** See *Decisions* at the end
 (D-C1 to D-C12) and the plan in §8. Baseline for line references: commit
 `a1a9344`.
 
@@ -798,8 +798,6 @@ stays `"3"` in this slice.
 | new tests | §6, adapted to H4: 409 `head_mismatch` (concurrent appends, a stale head, 403 before 409); `prior_head_valid` on M9, M10, M11; tail truncation stays `valid` with `closed: false`; `--expect-head` / `--expect-count`; API/offline parity of the new fields; SDK typed error and `retries` (never for closing types) | D-C3 to D-C8 |
 | `scripts/e2e_client.py` | v4 request and events | D-C2 |
 | `README.md`, `PARITY.md`, `CHANGELOG.md` | README "What it verifies" / "does not verify" for v4. PARITY row → Fixed for v4 proofs, keeping tail truncation and rejected signed events (D-C10) as the documented limit and v1–v3 as before. CHANGELOG: proof version `"4"`, SDK 0.5.0. | D-C10 |
-| D-C11 | `chain_head(events, *, proof_id)`: exported events do not carry `proof_id`, so it is a separate, required parameter. | §8 A |
-| D-C12 | `chain_head` and the SDK use `created_at` as the exported text, as is: no re-parsing or re-formatting (`.500000` and `.5` give different heads). A `datetime` object is rejected. | §8 A, §8 B |
 
 ### C. Dashboard
 
@@ -829,3 +827,5 @@ Approved for implementation. Section numbers refer to this document.
 | D-C8 | Offline CLI `--expect-head` / `--expect-count`: they do not change `verdict`; a mismatch gives exit status 1 and an `expectations` field in the result. `/verify` does not take these parameters. | §3.5; §7 q7 |
 | D-C9 | No `status_consistent`: a check that rests on an unsigned field gives no protection (M5). | §1.1; §7 q10 |
 | D-C10 | That rejected but signed events can be used for truncation with substitution is documented as part of the tail-truncation limit (§3.5, PARITY); mitigation is a separate design. | §3.2.1, §3.5; §7 q16 |
+| D-C11 | `chain_head(events, *, proof_id)`: exported events do not carry `proof_id`, so it is a separate, required parameter. | §8 A |
+| D-C12 | `chain_head` and the SDK use `created_at` as the exported text, as is: no re-parsing or re-formatting (`.500000` and `.5` give different heads). A `datetime` object is rejected. | §8 A, §8 B |

@@ -6,11 +6,16 @@ from .canonical import (
     CURRENT_PROOF_VERSION,
     LEGACY_PROOF_VERSIONS,
     TAG_PREFIX,
+    V3_PROOF_VERSION,
     build_event_canonical_v3,
+    build_event_canonical_v4,
     parse_event_canonical_v3,
+    parse_event_canonical_v4,
     parse_request_canonical_v3,
+    parse_request_canonical_v4,
 )
 from .crypto import (
+    chain_head,
     compute_task_hash,
     hash_event_record,
     is_proof_id,
@@ -63,17 +68,19 @@ def _request_binding_ok_v3(
     signature: Any,
     actor_did: Any,
     payload: Any,
+    parse_request=parse_request_canonical_v3,
 ) -> bool:
-    """Version-3 request.created: the tagged canonical parses
-    (app/canonical.py) and its nonce and text are the stored request's, and
-    the stored signature and actor are the request's."""
+    """Version-3 (and, with parse_request_canonical_v4, version-4)
+    request.created: the tagged canonical parses (app/canonical.py) and its
+    nonce and text are the stored request's, and the stored signature and
+    actor are the request's."""
     if not isinstance(payload, dict):
         return False
     request_signature = payload.get("signature")
     if not isinstance(request_signature, dict):
         return False
     try:
-        _, nonce, text = parse_request_canonical_v3(canonical)
+        _, nonce, text = parse_request(canonical)
     except ValueError:
         return False
 
@@ -85,13 +92,37 @@ def _request_binding_ok_v3(
     )
 
 
-def _signed_nonce_v3(event_type: Any, canonical: Any) -> str | None:
-    """The nonce inside a version-3 canonical, or None if it does not parse."""
+def _signed_nonce_v3(event_type: Any, canonical: Any, is_v4: bool = False) -> str | None:
+    """The nonce inside a version-3 (or version-4) canonical, or None if it
+    does not parse."""
+    parse_request = parse_request_canonical_v4 if is_v4 else parse_request_canonical_v3
+    parse_event = parse_event_canonical_v4 if is_v4 else parse_event_canonical_v3
     try:
         if event_type == "request.created":
-            return parse_request_canonical_v3(canonical)[1]
-        return parse_event_canonical_v3(canonical)[3]
+            return parse_request(canonical)[1]
+        return parse_event(canonical)[3]
     except ValueError:
+        return None
+
+
+def _signed_prior_head_v4(canonical: Any) -> str | None:
+    """The prior_head inside a version-4 event canonical, or None."""
+    try:
+        return parse_event_canonical_v4(canonical)[4]
+    except ValueError:
+        return None
+
+
+# Closing event types (app/main.py sets the proof status from them).
+CLOSING_EVENT_TYPES = frozenset({"proof.completed", "proof.failed"})
+
+
+def _chain_head_or_none(proof_id: str, events: list[dict[str, Any]]) -> str | None:
+    """chain_head of the exported events; None if the last one lacks the
+    link fields (such a chain is invalid anyway)."""
+    try:
+        return chain_head(events, proof_id=proof_id)
+    except (ValueError, TypeError):
         return None
 
 
@@ -101,11 +132,16 @@ def verify_proof_events(
     version: Any,
 ) -> dict[str, Any]:
     """`version` is the proof's version. It picks the canonical rules:
-    "3" takes only the tagged formats; "1"/"2" take only the untagged ones,
-    with Option B replay detection (docs/design/event-replay.md D-R5, D-R11,
-    D-R12). A missing or unknown version is not guessed: the proof is invalid.
+    "4" takes only the v4 tagged formats and checks each event's signed
+    prior_head (docs/design/proof-closure.md D-C1, D-C6); "3" takes only the
+    v3 tagged formats; "1"/"2" take only the untagged ones, with Option B
+    replay detection (docs/design/event-replay.md D-R5, D-R11, D-R12). A
+    missing or unknown version is not guessed: the proof is invalid. The
+    closing-event position rule applies to every version (D-C7).
     """
-    is_v3 = version == CURRENT_PROOF_VERSION
+    is_v4 = version == CURRENT_PROOF_VERSION
+    # The v3 and v4 paths share the tagged-format checks; "tagged" is both.
+    is_v3 = is_v4 or version == V3_PROOF_VERSION
 
     if not is_v3 and version not in LEGACY_PROOF_VERSIONS:
         return {
@@ -117,6 +153,9 @@ def verify_proof_events(
             "result_hash_valid": None,
             "artifact_hash_valid": None,
             "checks": [],
+            "closed": False,
+            "chain_head": None,
+            "event_count": 0,
         }
 
     if not events:
@@ -129,6 +168,9 @@ def verify_proof_events(
             "result_hash_valid": None,
             "artifact_hash_valid": None,
             "checks": [],
+            "closed": False,
+            "chain_head": None,
+            "event_count": 0,
         }
 
     checks = []
@@ -201,12 +243,32 @@ def verify_proof_events(
                 bool(expected_canonical)
                 and canonical == expected_canonical
             )
-            request_binding_ok = (
-                _request_binding_ok_v3 if is_v3 else _request_binding_ok
-            )(canonical, signature, actor_did, payload)
+            if is_v4:
+                request_binding_ok = _request_binding_ok_v3(
+                    canonical, signature, actor_did, payload,
+                    parse_request=parse_request_canonical_v4,
+                )
+            else:
+                request_binding_ok = (
+                    _request_binding_ok_v3 if is_v3 else _request_binding_ok
+                )(canonical, signature, actor_did, payload)
         else:
             request_binding_ok = None
-            if is_v3:
+            if is_v4:
+                # The canonical is rebuilt from the exported fields and the
+                # prior_head it signs; prior_head_valid below checks that
+                # head against the chain.
+                try:
+                    expected_canonical = build_event_canonical_v4(
+                        proof_id,
+                        event_type,
+                        payload_hash,
+                        event.get("nonce"),
+                        _signed_prior_head_v4(canonical),
+                    )
+                except ValueError:
+                    expected_canonical = None
+            elif is_v3:
                 try:
                     expected_canonical = build_event_canonical_v3(
                         proof_id, event_type, payload_hash, event.get("nonce")
@@ -228,7 +290,7 @@ def verify_proof_events(
         # replay_valid: v3, the signed nonce is new in this proof; v1/v2, the
         # (canonical, signature) pair is new in this proof (Option B, D-R5).
         if is_v3:
-            signed_nonce = _signed_nonce_v3(event_type, canonical)
+            signed_nonce = _signed_nonce_v3(event_type, canonical, is_v4)
             format_ok = (
                 signed_nonce is not None
                 and event.get("nonce") == signed_nonce
@@ -257,6 +319,21 @@ def verify_proof_events(
             )
         except Exception:
             signature_ok = False
+
+        # prior_head_valid (D-C6), version 4 only: the prior_head an event
+        # signs is the recomputed link of the event before it, and the
+        # exported previous_event_hash. None for request.created (it signs no
+        # head) and for v1/v2/v3 events.
+        if is_v4 and event_type != "request.created":
+            signed_prior_head = _signed_prior_head_v4(canonical)
+            prior_head_ok = (
+                previous_event is not None
+                and chain_ok
+                and signed_prior_head is not None
+                and signed_prior_head == previous_event_hash
+            )
+        else:
+            prior_head_ok = None
 
         # D-A10: replay the API's authorization rule over the chain. The
         # sequence-1 request.created is the creator's own event.
@@ -292,6 +369,8 @@ def verify_proof_events(
                 "request_binding_valid": request_binding_ok,
                 "format_valid": format_ok,
                 "replay_valid": replay_ok,
+                # Version 4, events after request.created; None otherwise.
+                "prior_head_valid": prior_head_ok,
                 "actor_did": actor_did,
                 "role": role,
                 "actor_authorized": authorization_reason is None,
@@ -306,6 +385,8 @@ def verify_proof_events(
             and request_binding_ok is not False
             and format_ok
             and replay_ok
+            # An event not bound to its position grants nothing either.
+            and prior_head_ok is not False
         ):
             authorization_prior.append(
                 {
@@ -328,9 +409,24 @@ def verify_proof_events(
         and check["request_binding_valid"] is not False
         and check["format_valid"]
         and check["replay_valid"]
+        and check["prior_head_valid"] is not False
         and check["actor_authorized"]
         for check in checks
     )
+
+    # D-C7, every version: at most one closing event, and it is the last one.
+    # The API refuses events after a closing event; a chain that has one was
+    # written around it.
+    closing_positions = [
+        index
+        for index, event in enumerate(events)
+        if event.get("type") in CLOSING_EVENT_TYPES
+    ]
+    position_ok = len(closing_positions) <= 1 and all(
+        index == len(events) - 1 for index in closing_positions
+    )
+    if not position_ok:
+        all_events_valid = False
 
     result_hash_valid = None
     artifact_hash_valid = None
@@ -428,7 +524,7 @@ def verify_proof_events(
     ):
         all_events_valid = False
 
-    return {
+    result = {
         "proof_id": proof_id,
         "proof_version": version,
         "verdict": "valid" if all_events_valid else "invalid",
@@ -438,4 +534,18 @@ def verify_proof_events(
         "task_hash_valid": task_hash_valid,
         "flop_metadata_status": flop_metadata_status,
         "checks": checks,
+        # D-C6. closed: the chain contains a closing event; false is not
+        # invalid on its own (an open proof, or a truncated one, §3.5).
+        "closed": bool(closing_positions),
+        "chain_head": _chain_head_or_none(proof_id, events),
+        "event_count": len(events),
     }
+    # DESIGN GAP: D-C7 decides the verdict but no output field for the
+    # position rule; the existing "reason" key names it, as the early returns
+    # do for their failures.
+    if not position_ok:
+        result["reason"] = (
+            "A closing event (proof.completed or proof.failed) is not the "
+            "last event, or there is more than one."
+        )
+    return result

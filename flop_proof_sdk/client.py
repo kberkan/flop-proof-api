@@ -9,7 +9,7 @@ import json
 import base58
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from .canonical import build_event_canonical_v3, build_request_canonical_v3
+from .canonical import build_event_canonical_v4, build_request_canonical_v4, chain_head
 
 
 ED25519_PUB_MULTICODEC = bytes([0xed, 0x01])
@@ -52,6 +52,33 @@ class FlopProofHTTPError(FlopProofError):
 
         message = f"FLOP API error {status_code}: {detail}"
         super().__init__(message)
+
+
+# The API's 409 detail for a stale prior_head (app/authorization.py REASONS).
+HEAD_MISMATCH_DETAIL = "Event prior_head does not match the current chain"
+
+# Never re-signed automatically (docs/design/proof-closure.md D-C4).
+CLOSING_EVENT_TYPES = frozenset({"proof.completed", "proof.failed"})
+
+
+class HeadMismatchError(FlopProofHTTPError):
+    """409 head_mismatch: the event signed `signed_head`, but the chain moved
+    on (another writer appended first). `current_head` is the head the SDK
+    read and checked after the rejection (D-C4)."""
+
+    def __init__(self, detail: Any, signed_head: str, current_head: str):
+        super().__init__(409, detail)
+        self.signed_head = signed_head
+        self.current_head = current_head
+
+
+class FlopProofChainError(FlopProofError):
+    """The API's chain_head does not match the head the SDK computes from the
+    exported events, or the export has no events. Nothing is signed.
+
+    This catches an inconsistent answer only. A server that consistently
+    serves a shortened chain is not detected here; compare chain_head with a
+    record of your own for that (README, "What it does not verify")."""
 
 
 class FlopProofClient:
@@ -146,8 +173,8 @@ class FlopProofClient:
         request_id: str,
         created_at: str,
     ) -> dict[str, Any]:
-        # Version-3 request format; raises ValueError for an invalid field.
-        canonical = build_request_canonical_v3(room, nonce, text)
+        # Version-4 request format; raises ValueError for an invalid field.
+        canonical = build_request_canonical_v4(room, nonce, text)
         signature = sign_message(
             private_key,
             canonical.encode("utf-8"),
@@ -167,6 +194,24 @@ class FlopProofClient:
 
         return self.create_proof(request)
 
+    def current_head(self, proof_id: str) -> str:
+        """The head a new event must sign: read from GET /proofs/{id}, computed
+        from the exported events (created_at as exported text, D-C12) and
+        compared with the export's chain_head. Raises FlopProofChainError if
+        they differ, before anything is signed."""
+        exported = self.get_proof(proof_id)
+        try:
+            computed = chain_head(exported.get("events"), proof_id=proof_id)
+        except ValueError as exc:
+            raise FlopProofChainError(f"Cannot compute the chain head: {exc}") from exc
+        if computed is None:
+            raise FlopProofChainError("The exported proof has no events.")
+        if computed != exported.get("chain_head"):
+            raise FlopProofChainError(
+                "The API's chain_head does not match its exported events; not signing."
+            )
+        return computed
+
     def append_signed_event(
         self,
         proof_id: str,
@@ -175,29 +220,56 @@ class FlopProofClient:
         event_type: str,
         payload: dict[str, Any],
         nonce: str,
+        prior_head: str | None = None,
+        *,
+        retries: int = 0,
     ) -> dict[str, Any]:
+        """Sign and append a version-4 event (FLOP/EVENT/v4, D-C1).
+
+        prior_head: the chain head to sign; if None, current_head() reads and
+        checks it. On 409 head_mismatch a HeadMismatchError is raised with the
+        current head (D-C4). With retries=N the event is re-signed on the new
+        head up to N times, with the same nonce (a rejected event is not
+        stored); proof.completed and proof.failed are never re-signed, because
+        a re-signed event states its signer saw a chain the caller has not
+        looked at. Version-4 proofs only: the API rejects prior_head on
+        v1/v2/v3 proofs (400).
+        """
+        if not isinstance(retries, int) or retries < 0:
+            raise ValueError("retries: must be a non-negative integer")
+
         payload_hash = sha256_json(payload)
-        # Version-3 event format: the nonce is signed. Version-3 proofs only;
-        # the API rejects new events in this format on v1/v2 proofs (D-R12).
-        canonical = build_event_canonical_v3(proof_id, event_type, payload_hash, nonce)
+        head = prior_head
+        attempt = 0
 
-        signature = sign_message(
-            private_key,
-            canonical.encode("utf-8"),
-        )
+        while True:
+            if head is None:
+                head = self.current_head(proof_id)
+            canonical = build_event_canonical_v4(
+                proof_id, event_type, payload_hash, nonce, head
+            )
+            event = {
+                "type": event_type,
+                "actor_did": did,
+                "payload": payload,
+                "signature": {
+                    "nonce": nonce,
+                    "sig": sign_message(private_key, canonical.encode("utf-8")),
+                    "canonical": canonical,
+                    "prior_head": head,
+                },
+            }
 
-        event = {
-            "type": event_type,
-            "actor_did": did,
-            "payload": payload,
-            "signature": {
-                "nonce": nonce,
-                "sig": signature,
-                "canonical": canonical,
-            },
-        }
-
-        return self.append_event(proof_id, event)
+            try:
+                return self.append_event(proof_id, event)
+            except FlopProofHTTPError as exc:
+                if exc.status_code != 409 or exc.detail != HEAD_MISMATCH_DETAIL:
+                    raise
+                current = self.current_head(proof_id)
+                if attempt >= retries or event_type in CLOSING_EVENT_TYPES:
+                    raise HeadMismatchError(exc.detail, head, current) from exc
+                attempt += 1
+                head = current
 
     def append_event(
         self,

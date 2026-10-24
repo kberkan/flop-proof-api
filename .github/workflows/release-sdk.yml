@@ -76,6 +76,7 @@ jobs:
         run: >
           python -m pytest -q
           test_sdk_canonical_v3.py
+          test_sdk_canonical_v4.py
           test_sdk_against_app.py
           test_client_signed.py -k "not test_signed_sdk_e2e"
 

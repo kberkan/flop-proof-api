@@ -1,11 +1,12 @@
-"""Version-3 signed message formats (docs/design/event-replay.md, D-R2, D-R3,
-D-R10).
+"""Signed message formats of version-3 (docs/design/event-replay.md, D-R2,
+D-R3, D-R10) and version-4 proofs (docs/design/proof-closure.md, D-C1, D-C2;
+below the v3 functions).
 
     request: FLOP/REQUEST/v3|room|nonce|text
     event:   FLOP/EVENT/v3|proof_id|type|payload_hash|nonce
 
 Pure functions: no database, network or global state. Used by the API for
-version-3 proofs and by the verifier; the v1/v2 formats (app/crypto.py
+version-3 and version-4 proofs and by the verifier; the v1/v2 formats (app/crypto.py
 canonical_signed_message, f"{proof_id}|{type}|{payload_hash}") are unchanged.
 flop_proof_sdk/canonical.py is a copy that must give the same results
 (test_sdk_canonical_v3.py).
@@ -40,9 +41,12 @@ from .crypto import PROOF_ID_PATTERN
 REQUEST_TAG = "FLOP/REQUEST/v3"
 EVENT_TAG = "FLOP/EVENT/v3"
 SEPARATOR = "|"
-# New proofs are version "3" and use these formats; the tag version equals the
-# proof version (D-R1, D-R2). v1/v2 proofs keep the untagged formats (D-R5).
-CURRENT_PROOF_VERSION = "3"
+# Version-3 proofs use these formats; the tag version equals the proof version
+# (D-R1, D-R2). v1/v2 proofs keep the untagged formats (D-R5). New proofs are
+# version "4" (below; docs/design/proof-closure.md D-C2); "3" proofs are still
+# verified on their own path, not as legacy v1/v2.
+V3_PROOF_VERSION = "3"
+CURRENT_PROOF_VERSION = "4"
 LEGACY_PROOF_VERSIONS = frozenset({"1", "2"})
 
 # Every tagged message starts with this. The v1/v2 verification path rejects
@@ -146,9 +150,9 @@ def parse_event_canonical_v3(canonical: str) -> tuple[str, str, str, str]:
 #     request: FLOP/REQUEST/v4|room|nonce|text
 #     event:   FLOP/EVENT/v4|proof_id|type|payload_hash|nonce|prior_head
 #
-# Not used by the API or the verifier yet (§8 A); CURRENT_PROOF_VERSION stays
-# "3". The v4 request is the v3 request with another tag (D-C2: a tag change
-# only), so the field rules are the v3 helpers above, unchanged. The v4 event
+# New proofs are version "4" (CURRENT_PROOF_VERSION above). The v4 request is
+# the v3 request with another tag (D-C2: a tag change only), so the field rules
+# are the v3 helpers above, unchanged. The v4 event
 # adds prior_head as the last field; nonce is no longer last, which changes
 # nothing for it: event fields are already "|"-free by D-R3.
 #

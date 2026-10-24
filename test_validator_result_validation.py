@@ -18,7 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.canonical import build_event_canonical_v3, build_request_canonical_v3
+from app.canonical import build_event_canonical_v4, build_request_canonical_v4
 from app.crypto import (
     ValidatorAttestation,
     compute_report_data,
@@ -189,11 +189,11 @@ def in_memory_db():
 
 
 def _proof_with_result(result_payload):
-    """A version-3 proof whose result.created carries `result_payload`."""
+    """A version-4 proof whose result.created carries `result_payload`."""
     private_key, public_key = generate_test_keypair()
     did = public_key_to_test_did(public_key)
     nonce = f"result-validation-{uuid.uuid4().hex}"
-    canonical = build_request_canonical_v3("result-validation", nonce, "validator result")
+    canonical = build_request_canonical_v4("result-validation", nonce, "validator result")
     created = client.post(
         "/proofs",
         json={
@@ -213,8 +213,9 @@ def _proof_with_result(result_payload):
     assert created.status_code == 201, created.text
     proof_id = created.json()["proof_id"]
     event_nonce = f"{nonce}-result"
-    event_canonical = build_event_canonical_v3(
-        proof_id, "result.created", sha256_json(result_payload), event_nonce
+    head = client.get(f"/proofs/{proof_id}").json()["chain_head"]
+    event_canonical = build_event_canonical_v4(
+        proof_id, "result.created", sha256_json(result_payload), event_nonce, head
     )
     appended = client.post(
         f"/proofs/{proof_id}/events",
@@ -226,6 +227,7 @@ def _proof_with_result(result_payload):
                 "nonce": event_nonce,
                 "sig": sign_message(private_key, event_canonical.encode()),
                 "canonical": event_canonical,
+                "prior_head": head,
             },
         },
     )

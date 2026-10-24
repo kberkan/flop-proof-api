@@ -121,12 +121,12 @@ def test_attestation_boolean_fields_reject_non_booleans_with_422(registry, field
 # --- POST /proofs: request.created_at is a timezone-aware ISO 8601 string ------------------
 
 def _proof_request(created_at):
-    from app.canonical import build_request_canonical_v3
+    from app.canonical import build_request_canonical_v4
     from app.crypto import generate_test_keypair, public_key_to_test_did, sign_message
 
     private_key, public_key = generate_test_keypair()
     nonce = f"typing-{uuid.uuid4().hex}"
-    canonical = build_request_canonical_v3("typing-room", nonce, "typing")
+    canonical = build_request_canonical_v4("typing-room", nonce, "typing")
     return {
         "request": {
             "request_id": f"typing-{uuid.uuid4().hex}",

@@ -3,6 +3,29 @@
 ## [Unreleased]
 
 ### Security
+- New proofs are version `"4"` (docs/design/proof-closure.md, D-C1 to D-C12).
+  Every event signs the chain head it is appended to,
+  `FLOP/EVENT/v4|proof_id|type|payload_hash|nonce|prior_head`, and requests use
+  `FLOP/REQUEST/v4|room|nonce|text`. `POST /proofs` accepts only v4 requests
+  (401 otherwise, no proof is written), so SDK 0.4.x and older can no longer
+  create proofs. Events take `signature.prior_head`: required on version-4
+  proofs, refused on version 1–3 proofs (400); a head that is not the current
+  one gets 409 "Event prior_head does not match the current chain", checked
+  last under the chain lock (403 comes first). `GET /proofs/{id}` and every
+  append response include `chain_head`.
+- `/verify` and the offline verifier report `prior_head_valid` per event
+  (null for `request.created` and for v1–v3 events) and `closed`,
+  `chain_head` and `event_count` per proof (`events_checked` is unchanged). In
+  version-4 proofs, events removed from or reordered in an export, with the
+  links recomputed, now make the proof invalid. In every version, an event
+  after a closing event (or a second closing event) makes the proof invalid,
+  with a `reason`.
+- Not detected, by design: removing the last events of a proof, the closing
+  event included (it then verifies as an open proof), including with an event
+  the API rejected after checking its signature; and re-linking in version
+  1–3 proofs. The offline verifier's new `--expect-head` / `--expect-count`
+  compare an export with a head or count kept outside the service (exit 1 on
+  a mismatch; the verdict is unchanged).
 - Small-order Ed25519 keys are refused as actor DIDs. Signatures under such
   keys can verify without a private key; previously a DID with one could
   create a proof and append to it, and `/verify` reported it valid. The API
@@ -22,11 +45,13 @@
   API, are not detected either. Dashboard wording: "Event chain (order and
   links)" is now "Event numbering and links", and the `/verify` evidence
   boundary no longer says it proves the chain's integrity.
-- New open row in `PARITY.md` (Known Security Gaps): "Export events can be
+- New row in `PARITY.md` (Known Security Gaps): "Export events can be
   removed or reordered and re-linked; events written after a closing event
-  are not detected by the verifier", locked by three strict-xfail tests in
-  `test_security_regression.py`.
-- Added `docs/design/proof-closure.md` (proposal, not implemented).
+  are not detected by the verifier". First recorded as open with three
+  strict-xfail tests; now fixed for version 4 (see Security), with the
+  remaining limits listed in the row.
+- Added `docs/design/proof-closure.md`; implemented except the dashboard part
+  (§8 C).
 
 ### Changed
 - `POST /proofs` and `POST /proofs/{proof_id}/events` answer a malformed
@@ -68,6 +93,31 @@
   `alembic upgrade head` on it fails with "table already exists", as before).
   `scripts/run_tests.sh` builds its test database with the migrations, and
   `test_migrations.py` checks that they produce the schema of `app/models.py`.
+
+## [0.5.0] - unreleased
+
+The SDK for version-4 proofs. The API change it follows is listed under
+[Unreleased]; SDK 0.4.x cannot create proofs against that API.
+
+### Changed
+- `create_signed_proof` signs `FLOP/REQUEST/v4|room|nonce|text`.
+- `append_signed_event(..., nonce, prior_head=None, *, retries=0)` signs
+  `FLOP/EVENT/v4|proof_id|type|payload_hash|nonce|prior_head` and sends
+  `signature.prior_head`. Without `prior_head` it calls the new
+  `current_head(proof_id)`, which reads `GET /proofs/{id}`, computes the head
+  from the exported events (`created_at` used as exported text) and compares
+  it with the export's `chain_head`; on a difference it raises the new
+  `FlopProofChainError` and signs nothing.
+
+### Added
+- `HeadMismatchError` (a `FlopProofHTTPError`, status 409) with
+  `signed_head` and `current_head`. `retries=N` re-signs on the new head up
+  to N times, never for `proof.completed` / `proof.failed`.
+- `build_request_canonical_v4`, `parse_request_canonical_v4`,
+  `build_event_canonical_v4`, `parse_event_canonical_v4`, `chain_head`,
+  `REQUEST_TAG_V4`, `EVENT_TAG_V4`; checked against
+  `tests/fixtures/canonical_v4_vectors.json` (`test_sdk_canonical_v4.py`).
+  The v3 functions stay.
 
 ## [0.4.1] - 2026-10-08
 
