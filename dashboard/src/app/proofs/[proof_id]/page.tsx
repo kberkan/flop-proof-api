@@ -14,20 +14,25 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ChainHeadPanel, ClosurePanel, ClosureWarning, VerifierReason } from "@/components/chain-integrity";
 import { Timestamp } from "@/components/timestamp";
 import { verifyBoundary } from "@/lib/evidence-boundary";
 import {
   type CardTone,
   type CheckState,
   type VerifyState,
-  cardTone,
+  chainHeadView,
   checkStateLabel,
+  closureView,
   eventRows,
   evidenceChecks,
   evidenceSummary,
+  positionViolation,
   proofFormat,
   statusLabel,
+  summaryTone,
   verdictBadge,
+  verifyReason,
 } from "@/lib/proof-view";
 
 type ProofDetail = {
@@ -52,6 +57,7 @@ const CHECK_STYLE: Record<CardTone, { icon: typeof CheckCircle2; className: stri
   "pass-muted": { icon: CheckCircle2, className: "text-slate-400", text: "Pass" },
   fail: { icon: XCircle, className: "text-red-400", text: "Fail" },
   unknown: { icon: CircleHelp, className: "text-slate-500", text: "Not available" },
+  "not-applicable": { icon: CircleHelp, className: "text-slate-600", text: "Not applicable" },
 };
 
 const EVENT_CHECK_STYLE: Record<CheckState, string> = {
@@ -146,6 +152,10 @@ export default function ProofDetailPage({
   const format = proofFormat(verifyData);
   const events = Array.isArray(proof?.events) ? proof.events : [];
   const rows = eventRows(events, verifyData);
+  const closure = closureView(proof?.status, verifyData);
+  const position = positionViolation(verifyData);
+  const reason = verifyReason(verifyData);
+  const head = chainHeadView(verifyData);
 
   return (
     <main className="min-h-screen bg-[#080b10] text-white">
@@ -193,8 +203,8 @@ export default function ProofDetailPage({
                   Verification: {badge.label}
                 </div>
                 {badge.detail && <p className="text-xs text-slate-500">{badge.detail}</p>}
-                <div className="text-xs text-slate-500">
-                  Lifecycle status: <span className="text-slate-300">{statusLabel(proof.status)}</span>
+                <div className="lg:text-right">
+                  <ClosurePanel closure={closure} />
                 </div>
                 <div data-testid="proof-format" data-version={format.version ?? ""} className="text-xs text-slate-300">
                   {format.label}
@@ -207,7 +217,10 @@ export default function ProofDetailPage({
               </div>
             </header>
 
-            <div className="grid gap-5 lg:grid-cols-3">
+            <ClosureWarning closure={closure} />
+            <VerifierReason reason={reason} position={position} />
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-3">
               <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-6 lg:col-span-2">
                 <div className="mb-5 flex items-center gap-3">
                   <div className="rounded-xl bg-white/[0.04] p-2.5">
@@ -224,7 +237,7 @@ export default function ProofDetailPage({
                     ["Proof ID", proof.proof_id],
                     ["Request ID", proof.request_id],
                     ["Version", proof.version],
-                    ["Status", statusLabel(proof.status)],
+                    ["Status (server record, not verified)", statusLabel(proof.status)],
                     ["Created", <Timestamp key="created" value={proof.created_at} />],
                     ["Updated", <Timestamp key="updated" value={proof.updated_at} />],
                   ] as [string, ReactNode][]).map(([label, value]) => (
@@ -244,7 +257,7 @@ export default function ProofDetailPage({
 
                 <div className="mt-6 space-y-3">
                   {checks.map((check) => {
-                    const style = CHECK_STYLE[cardTone(check.ok, badge.tone)];
+                    const style = CHECK_STYLE[summaryTone(check, badge.tone)];
                     const Icon = style.icon;
                     return (
                       <div
@@ -261,6 +274,10 @@ export default function ProofDetailPage({
                       </div>
                     );
                   })}
+                </div>
+
+                <div className="mt-6 border-t border-white/[0.06] pt-5">
+                  <ChainHeadPanel view={head} />
                 </div>
 
                 <div className="mt-6 space-y-2 border-t border-white/[0.06] pt-5 text-xs">
@@ -305,6 +322,7 @@ export default function ProofDetailPage({
                       data-event-sequence={row.sequence ?? ""}
                       data-role={row.role}
                       data-authorized={String(row.authorized)}
+                      data-position-violation={String(row.positionViolation)}
                       className={`rounded-xl border p-5 ${
                         row.flagged
                           ? "border-red-400/30 bg-red-400/[0.05]"
@@ -318,6 +336,11 @@ export default function ProofDetailPage({
 
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-slate-200">{row.type}</p>
+                          {row.positionViolation && (
+                            <p data-testid="position-marker" className="mt-1 text-xs text-red-300">
+                              Out of place: a closing event comes before this event.
+                            </p>
+                          )}
 
                           <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-4">
                             <div>

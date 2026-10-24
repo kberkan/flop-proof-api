@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Timestamp } from "@/components/timestamp";
+import { STATUS_TOOLTIP } from "@/lib/proof-view";
 
 type Proof = {
   proof_id: string;
@@ -267,6 +268,7 @@ export default function ProofsPage() {
 
                   <div>
                     <span
+                      title={STATUS_TOOLTIP}
                       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${meta.className}`}
                     >
                       <Icon size={12} />

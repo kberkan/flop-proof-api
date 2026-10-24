@@ -22,13 +22,16 @@ import {
 import { ApiStatusIndicator } from "@/components/api-status-indicator";
 import { API_HOST } from "@/lib/api-target";
 import { type LoadOutcome, freshness } from "@/lib/freshness";
-import { statusLabel } from "@/lib/proof-view";
+import { STATUS_TOOLTIP, statusLabel } from "@/lib/proof-view";
 import { Timestamp } from "@/components/timestamp";
 
 // Lifecycle status only; whether a proof verifies is shown on /verification.
 function Status({ value }: { value: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-300">
+    <span
+      title={STATUS_TOOLTIP}
+      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-300"
+    >
       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
       {statusLabel(value)}
     </span>

@@ -14,17 +14,22 @@ import {
   XCircle,
 } from "lucide-react";
 
+import { ChainHeadPanel, ClosurePanel, ClosureWarning, VerifierReason } from "@/components/chain-integrity";
 import { verifyBoundary } from "@/lib/evidence-boundary";
 import {
   type CardTone,
   type VerifyState,
-  cardTone,
+  chainHeadView,
   checkStateLabel,
+  closureView,
   eventRows,
   evidenceChecks,
+  positionViolation,
   proofFormat,
   statusLabel,
+  summaryTone,
   verdictBadge,
+  verifyReason,
 } from "@/lib/proof-view";
 import { isProofId } from "@/lib/proxy-policy";
 
@@ -46,6 +51,7 @@ const CARD_STYLE: Record<CardTone, { icon: typeof CheckCircle2; className: strin
   "pass-muted": { icon: CheckCircle2, className: "text-slate-400", text: "Pass" },
   fail: { icon: XCircle, className: "text-red-400", text: "Fail" },
   unknown: { icon: CircleHelp, className: "text-slate-500", text: "Not available" },
+  "not-applicable": { icon: CircleHelp, className: "text-slate-600", text: "Not applicable" },
 };
 
 const INVALID_ID_MESSAGE =
@@ -79,6 +85,7 @@ function VerificationCenter() {
     requestId: number;
     verify: VerifyState;
     events: unknown[];
+    status: unknown; // lifecycle status from GET /proofs/{id}; undefined if it failed
   } | null>(null);
 
   useEffect(() => {
@@ -120,6 +127,7 @@ function VerificationCenter() {
           proofResult.status === "fulfilled" && Array.isArray(proofResult.value?.events)
             ? proofResult.value.events
             : [],
+        status: proofResult.status === "fulfilled" ? proofResult.value?.status : undefined,
       });
     });
 
@@ -148,6 +156,10 @@ function VerificationCenter() {
   const checks = evidenceChecks(verifyData);
   const rows = eventRows(events, verifyData);
   const format = proofFormat(verifyData);
+  const closure = closureView(current?.status, verifyData);
+  const position = positionViolation(verifyData);
+  const reason = verifyReason(verifyData);
+  const head = chainHeadView(verifyData);
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
@@ -166,8 +178,8 @@ function VerificationCenter() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Verification Center</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Check a proof&apos;s signatures, event chain, payload hashes and actor authorization.
-            This does not verify execution or settlement.
+            Check a proof&apos;s signatures, payload hashes, signed chain heads, event numbering
+            and links, and actor authorization. This does not verify execution or settlement.
           </p>
         </div>
 
@@ -249,22 +261,28 @@ function VerificationCenter() {
                   </div>
                 </div>
                 {selected && (
-                  <div className="max-w-full md:max-w-md">
-                    <div className="text-xs text-slate-500">Proof ID</div>
-                    <Link
-                      href={`/proofs/${selected}`}
-                      className="mt-1 block truncate font-mono text-xs text-slate-300 hover:text-white"
-                    >
-                      {selected}
-                    </Link>
+                  <div className="max-w-full space-y-3 md:max-w-md">
+                    <div>
+                      <div className="text-xs text-slate-500">Proof ID</div>
+                      <Link
+                        href={`/proofs/${selected}`}
+                        className="mt-1 block truncate font-mono text-xs text-slate-300 hover:text-white"
+                      >
+                        {selected}
+                      </Link>
+                    </div>
+                    {verifyData !== null && <ClosurePanel closure={closure} />}
                   </div>
                 )}
               </div>
             </section>
 
+            <ClosureWarning closure={closure} />
+            <VerifierReason reason={reason} position={position} />
+
             <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {checks.map((check) => {
-                const style = CARD_STYLE[cardTone(check.ok, badge.tone)];
+                const style = CARD_STYLE[summaryTone(check, badge.tone)];
                 const Icon = style.icon;
                 return (
                   <div
@@ -280,6 +298,12 @@ function VerificationCenter() {
                 );
               })}
             </section>
+
+            {verifyData !== null && (
+              <section className="mt-6 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+                <ChainHeadPanel view={head} />
+              </section>
+            )}
 
             {rows.length > 0 && (
               <section className="mt-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.02]">
@@ -298,12 +322,20 @@ function VerificationCenter() {
                     data-event-sequence={row.sequence ?? ""}
                     data-role={row.role}
                     data-authorized={String(row.authorized)}
+                    data-position-violation={String(row.positionViolation)}
                     className={`grid grid-cols-[50px_1fr_1.2fr_100px_1fr_1fr_1.4fr] items-center border-b border-white/[0.05] px-5 py-3 text-xs ${
                       row.flagged ? "bg-red-400/[0.06] text-red-200" : "text-slate-300"
                     }`}
                   >
                     <span>{row.sequence ?? "—"}</span>
-                    <span>{row.type}</span>
+                    <span>
+                      {row.type}
+                      {row.positionViolation && (
+                        <span data-testid="position-marker" className="block text-red-300">
+                          Out of place: after a closing event
+                        </span>
+                      )}
+                    </span>
                     <span className="font-mono" title={row.actorDid ?? undefined}>
                       {row.actorShort}
                     </span>

@@ -68,10 +68,11 @@ const endpoints = [
   },
 ];
 
-// Examples for SDK 0.4.1 and API proof version "3" (docs/design/event-replay.md).
-// Placeholders in {braces} are filled in by the caller; the Python examples
-// run as written with FLOP_API_KEY set.
-const createExample = `# The signature is Ed25519 over FLOP/REQUEST/v3|{room}|{nonce}|{text}
+// Examples for SDK 0.5.0 and API proof version "4" (docs/design/proof-closure.md,
+// docs/design/event-replay.md). Placeholders in {braces} are filled in by the
+// caller; the Python examples run as written with FLOP_API_KEY set. Every
+// example was run against a temporary API (see the slice report).
+const createExample = `# The signature is Ed25519 over FLOP/REQUEST/v4|{room}|{nonce}|{text}
 # (base64url, no padding). See "Canonical signing" below.
 curl -X POST http://localhost:8000/proofs \\
   -H "Content-Type: application/json" \\
@@ -85,14 +86,21 @@ curl -X POST http://localhost:8000/proofs \\
       "signature": {
         "nonce": "{nonce}",
         "sig": "{signature}",
-        "canonical": "FLOP/REQUEST/v3|{room}|{nonce}|{text}"
+        "canonical": "FLOP/REQUEST/v4|{room}|{nonce}|{text}"
       }
     }
   }'`;
 
-const appendExample = `# The signature is Ed25519 over
-# FLOP/EVENT/v3|{proof_id}|agent.started|{payload_hash}|{event_nonce};
+const appendExample = `# 1. The current chain head, which the event signs:
+curl -s http://localhost:8000/proofs/{proof_id} \\
+  -H "X-API-Key: $FLOP_API_KEY" | python3 -c 'import json, sys; print(json.load(sys.stdin)["chain_head"])'
+
+# 2. The signature is Ed25519 over
+# FLOP/EVENT/v4|{proof_id}|agent.started|{payload_hash}|{event_nonce}|{prior_head};
 # payload_hash is the SHA-256 hex of the payload as compact, key-sorted JSON.
+# If another event was appended in between, the API answers 409
+# "Event prior_head does not match the current chain": read the head again
+# and sign again.
 curl -X POST http://localhost:8000/proofs/{proof_id}/events \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: $FLOP_API_KEY" \\
@@ -103,21 +111,28 @@ curl -X POST http://localhost:8000/proofs/{proof_id}/events \\
     "signature": {
       "nonce": "{event_nonce}",
       "sig": "{event_signature}",
-      "canonical": "FLOP/EVENT/v3|{proof_id}|agent.started|{payload_hash}|{event_nonce}"
+      "canonical": "FLOP/EVENT/v4|{proof_id}|agent.started|{payload_hash}|{event_nonce}|{prior_head}",
+      "prior_head": "{prior_head}"
     }
   }'`;
 
 const verifyExample = `curl http://localhost:8000/proofs/{proof_id}/verify \\
   -H "X-API-Key: $FLOP_API_KEY"`;
 
-const installExample = `pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.4.1/flop_proof_sdk-0.4.1-py3-none-any.whl`;
+const offlineExample = `# In a checkout of the repository (the verifier is part of app/, not of the SDK).
+# --expect-head compares the export with a chain_head kept outside the service;
+# a mismatch prints "Expected head: MISMATCH" and exits 1, the verdict is unchanged.
+python -m app.verifier proof.json --expect-head {chain_head} --expect-count {event_count}`;
 
-const pythonExample = `import os
+const installExample = `pip install https://github.com/kberkan/flop-proof-api/releases/download/sdk-v0.5.0/flop_proof_sdk-0.5.0-py3-none-any.whl`;
+
+const pythonExample = `import json
+import os
 import uuid
 from datetime import datetime, timezone
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from flop_proof_sdk import FlopProofClient, public_key_to_test_did
+from flop_proof_sdk import FlopProofClient, HeadMismatchError, public_key_to_test_did
 
 client = FlopProofClient(
     "http://localhost:8000",
@@ -136,9 +151,12 @@ proof = client.create_signed_proof(
     request_id=f"demo-{uuid.uuid4().hex}",
     created_at=datetime.now(timezone.utc).isoformat(),
 )
+proof_id = proof["proof_id"]
 
+# Without prior_head=, the SDK reads the chain head (current_head) and checks
+# it against the exported events before signing.
 client.append_signed_event(
-    proof_id=proof["proof_id"],
+    proof_id=proof_id,
     private_key=private_key,
     did=did,
     event_type="result.created",
@@ -146,34 +164,57 @@ client.append_signed_event(
     nonce=f"event-{uuid.uuid4().hex}",
 )
 
-result = client.verify_proof(proof["proof_id"])
+# A head that is no longer current gets 409; retries=N signs again on the new
+# head (never for proof.completed / proof.failed).
+stale_head = client.current_head(proof_id)
+client.append_signed_event(proof_id, private_key, did, "agent.note", {"n": 1}, f"event-{uuid.uuid4().hex}")
+try:
+    client.append_signed_event(
+        proof_id, private_key, did, "agent.note", {"n": 2}, f"event-{uuid.uuid4().hex}",
+        prior_head=stale_head,
+    )
+except HeadMismatchError as error:
+    print("409, current head:", error.current_head[:16])
 
-print(proof["version"], result["verdict"])`;
+# Close the proof. Keep the chain head from the response outside this service.
+closed = client.append_signed_event(
+    proof_id, private_key, did, "proof.completed", {}, f"close-{uuid.uuid4().hex}"
+)
+result = client.verify_proof(proof_id)
+
+print(proof["version"], result["verdict"], result["closed"], result["event_count"])
+print("chain head to keep:", closed["chain_head"])
+
+with open("proof.json", "w") as f:
+    json.dump(client.get_proof(proof_id), f)`;
 
 const signingExample = `from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from flop_proof_sdk import (
-    build_event_canonical_v3,
-    build_request_canonical_v3,
+    build_event_canonical_v4,
+    build_request_canonical_v4,
     sha256_json,
     sign_message,
 )
 
 private_key = Ed25519PrivateKey.generate()
 
-# Request: FLOP/REQUEST/v3|room|nonce|text. room and nonce must not contain
+# Request: FLOP/REQUEST/v4|room|nonce|text. room and nonce must not contain
 # "|" or control characters; text may.
-request_canonical = build_request_canonical_v3(
+request_canonical = build_request_canonical_v4(
     "demo-room", "request-nonce-1", "Summarize | report"
 )
 request_signature = sign_message(private_key, request_canonical.encode("utf-8"))
 
-# Event: FLOP/EVENT/v3|proof_id|type|payload_hash|nonce. The nonce is signed.
+# Event: FLOP/EVENT/v4|proof_id|type|payload_hash|nonce|prior_head. The nonce
+# and the chain head (client.current_head(proof_id), 64 lowercase hex) are
+# signed; prior_head is also sent as signature.prior_head.
 payload = {"content": "summary text"}
-event_canonical = build_event_canonical_v3(
+event_canonical = build_event_canonical_v4(
     "proof_0123456789abcdef0123456789abcdef",
     "result.created",
     sha256_json(payload),
     "event-nonce-1",
+    "9d5ed678fe57bcca610140957afab571b33d5c3e8a7e52b0ce3c8b5d5e1dd8b2",
 )
 event_signature = sign_message(private_key, event_canonical.encode("utf-8"))
 
@@ -266,7 +307,7 @@ export default function DeveloperPage() {
             <LockKeyhole className="text-emerald-400" size={19} />
             <div className="mt-4 text-sm font-medium">Hash-linked proofs</div>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Canonical messages, signatures and event hash chains.
+              Signed messages, signed chain heads and hash-linked events.
             </p>
           </div>
         </section>
@@ -333,7 +374,7 @@ export default function DeveloperPage() {
               <div>
                 <h2 className="font-medium">Append an event</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Events on version-3 proofs sign their nonce.
+                  Events on version-4 proofs sign their nonce and the chain head.
                 </p>
               </div>
             </div>
@@ -347,12 +388,26 @@ export default function DeveloperPage() {
               <div>
                 <h2 className="font-medium">Verify a proof</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Check signatures, event chain, payload hashes and actor authorization.
+                  Check signatures, signed chain heads, payload hashes and actor authorization.
                 </p>
               </div>
             </div>
 
             <CodeBlock>{verifyExample}</CodeBlock>
+          </section>
+
+          <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5">
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={18} />
+              <div>
+                <h2 className="font-medium">Check an export offline</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Removing the last events is only detected against a chain head kept outside the service.
+                </p>
+              </div>
+            </div>
+
+            <CodeBlock>{offlineExample}</CodeBlock>
           </section>
         </div>
 
@@ -425,7 +480,7 @@ export default function DeveloperPage() {
               <div>
                 <h2 className="font-medium">Canonical signing</h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Version-3 request and event messages, signed before transmission.
+                  Version-4 request and event messages, signed before transmission.
                 </p>
               </div>
             </div>
@@ -452,8 +507,10 @@ export default function DeveloperPage() {
                 ["Canonical message", "Checked"],
                 ["Ed25519 signature", "Checked"],
                 ["Request binding (request.created)", "Checked"],
-                ["Message format (v3 tags; legacy v1/v2)", "Checked"],
+                ["Message format (v4 tags; v3; legacy v1/v2)", "Checked"],
                 ["Replayed events in the proof", "Rejected"],
+                ["Signed chain head (v4)", "Checked"],
+                ["Closing event is the last event", "Checked"],
                 ["Actor authorization (creator or delegate)", "Checked"],
               ].map(([label, value]) => (
                 <div

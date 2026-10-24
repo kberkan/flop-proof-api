@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import {
   LEGACY_FORMAT_NOTE,
+  NO_CHAIN_HEAD_NOTE,
   cardTone,
   checkStateLabel,
   eventChecks,
@@ -130,7 +131,16 @@ for (const [name, state] of Object.entries(NEVER_VALID)) {
 
 test("a valid v3 proof gives a valid badge", () => {
   assert.equal(verdictBadge({ kind: "result", data: VALID }).tone, "valid");
-  assert.ok(evidenceChecks(VALID).every((c) => c.ok === true));
+  // The signed chain head applies to no event of a v3 proof (D-C6): it is
+  // "not applicable" and does not block the badge; every other check passes.
+  const summary = evidenceChecks(VALID);
+  assert.ok(summary.every((c) => !c.applies || c.ok === true));
+  assert.deepEqual(summary.find((c) => c.key === "prior_head"), {
+    key: "prior_head",
+    label: "Signed chain head",
+    ok: null,
+    applies: false,
+  });
 });
 
 test("request_binding_valid null on a non-request event does not affect the badge", () => {
@@ -172,6 +182,9 @@ test("evidence checks reflect the real check values", () => {
     request_binding: true,
     format: true,
     replay: true,
+    // INVALID_FOREIGN has no proof_version, which counts as version 4, and its
+    // events report no prior_head_valid: not available, never a pass.
+    prior_head: null,
   });
 });
 
@@ -185,23 +198,39 @@ test("new checks fail or become unavailable by scope", () => {
 });
 
 test("per-event checks: not applicable, not available, pass, fail", () => {
+  // Without a proof version the chain-head rule is the v4 one (D-C6): not
+  // applicable on request.created, required on every other event. The
+  // fixture's events report no prior_head_valid, so it is not available there.
   const states = (c) => Object.fromEntries(eventChecks(c).map((item) => [item.key, item.state]));
-  assert.deepEqual(states(check(1)), { request_binding: "pass", format: "pass", replay: "pass" });
-  assert.deepEqual(states(check(2)), { request_binding: "not-applicable", format: "pass", replay: "pass" });
+  assert.deepEqual(states(check(1)), {
+    request_binding: "pass",
+    format: "pass",
+    replay: "pass",
+    prior_head: "not-applicable",
+  });
+  assert.deepEqual(states(check(2)), {
+    request_binding: "not-applicable",
+    format: "pass",
+    replay: "pass",
+    prior_head: "not-available",
+  });
   assert.deepEqual(states(check(2, { replay_valid: false })), {
     request_binding: "not-applicable",
     format: "pass",
     replay: "fail",
+    prior_head: "not-available",
   });
   assert.deepEqual(states({ ...check(1), request_binding_valid: undefined, format_valid: null }), {
     request_binding: "not-available",
     format: "not-available",
     replay: "pass",
+    prior_head: "not-applicable",
   });
   assert.deepEqual(states(undefined), {
     request_binding: "not-available",
     format: "not-available",
     replay: "not-available",
+    prior_head: "not-available",
   });
   assert.deepEqual(
     ["pass", "fail", "not-applicable", "not-available"].map(checkStateLabel),
@@ -294,16 +323,25 @@ test("short nonce", () => {
 });
 
 test("proof format from proof_version", () => {
-  assert.deepEqual(proofFormat(VALID), { version: "3", label: "Format: v3", legacy: false, note: null });
+  // Version 4 is current (D-C2); v1–v3 carry the note that their events sign
+  // no chain head (README, PARITY).
+  assert.deepEqual(proofFormat({ ...VALID, proof_version: "4" }), {
+    version: "4",
+    label: "Format: v4",
+    legacy: false,
+    note: null,
+  });
+  assert.deepEqual(proofFormat(VALID), { version: "3", label: "Format: v3", legacy: false, note: NO_CHAIN_HEAD_NOTE });
   for (const version of ["1", "2"]) {
     const format = proofFormat({ ...VALID, proof_version: version });
     assert.equal(format.label, `Format: legacy v${version}`);
     assert.equal(format.legacy, true);
-    assert.equal(format.note, LEGACY_FORMAT_NOTE);
+    assert.equal(format.note, `${LEGACY_FORMAT_NOTE} ${NO_CHAIN_HEAD_NOTE}`);
   }
-  for (const data of [null, {}, { proof_version: 3 }, { proof_version: "4" }]) {
+  for (const data of [null, {}, { proof_version: 3 }, { proof_version: 4 }, { proof_version: "5" }]) {
     assert.equal(proofFormat(data).label, "Format: unknown", JSON.stringify(data));
   }
+  assert.match(NO_CHAIN_HEAD_NOTE, /sign no chain head/);
   assert.match(LEGACY_FORMAT_NOTE, /nonce is not part of the signed message/);
   assert.match(LEGACY_FORMAT_NOTE, /repeated \(canonical, signature\) pair/);
 });

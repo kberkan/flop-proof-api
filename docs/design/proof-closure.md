@@ -1,6 +1,6 @@
 # Proof closure and tail truncation (design)
 
-Status: **implemented (dashboard pending, §8 C).** See *Decisions* at the end
+Status: **implemented** (§8 A, B and C). See *Decisions* at the end
 (D-C1 to D-C12) and the plan in §8. Baseline for line references: commit
 `a1a9344`.
 

@@ -62,6 +62,21 @@
   key that CI and `scripts/run_tests.sh` use when `FLOP_API_KEY` is not set.
 
 ### Fixed (dashboard)
+- Version-4 proofs: "Format: v4" (was "Format: unknown"); a "Signed chain head"
+  check per proof and per event from `prior_head_valid`, which must be reported
+  on every v4 event after `request.created` for the badge to be "Valid"; the
+  verifier's `reason` with out-of-place events marked when a closing event is
+  not last; `chain_head` and `event_count` with the note to keep the head
+  outside the service and check exports with `--expect-head`.
+- The lifecycle status is labelled as the server's record and shown next to
+  whether the verified chain has a closing event; a disagreement shows a
+  warning (the chain may have been cut short; the status is unsigned) without
+  changing the verdict. List and overview status labels have a tooltip saying
+  the status is not verified. Version 1–3 proofs note that their events sign
+  no chain head.
+- Developer page examples use the version-4 request and event formats with
+  `prior_head`, `current_head`, `HeadMismatchError`, closing a proof, the
+  offline `--expect-head` check, and SDK 0.5.0.
 - Proof times were shown shifted by the viewer's UTC offset and without a time
   zone: the API sends UTC timestamps without an offset (the event `created_at`
   string is part of the event-chain hash, so the API keeps that form), and the

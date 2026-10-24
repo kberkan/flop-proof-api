@@ -79,6 +79,26 @@ refresh proofs; showing previous data." when a refresh fails, and "Proofs could
 not be loaded." when there is no previous data, as the actors page does. See
 `docs/design/event-replay.md` D-R8.
 
+**Dashboard, version-4 verification output (fixed):** the detail and
+verification pages show `prior_head_valid` per event and as a "Signed chain
+head" check (Pass / Fail / Not applicable / Not available: not applicable on
+`request.created` and on every event of a v1–v3 proof; on any other event a
+missing or null value is "Not available" and the badge is never "Valid"), the
+verifier's `reason` with the events that break the closing-event position rule
+marked, "Format: v4" (v1–v3 formats carry the note that their events sign no
+chain head, so removal or reordering with recomputed links is not detected),
+and `chain_head` (copyable, full value on hover) and `event_count` with the note
+to keep them outside the service and use `--expect-head`, since trailing events
+can otherwise be removed undetected. The lifecycle status is shown as "server
+record" next to "Closing event in verified chain" from `/verify` `closed`; when
+they disagree (for example status Completed without a closing event) a warning
+says the chain may have been cut short and that the status is unsigned. The
+warning never changes the verdict (D-C9). List and overview status labels carry
+the tooltip "Lifecycle status from the server record; not verified." A `valid`
+verdict with a closing event that is not last is shown as "Could not verify".
+The Developer page examples use the version-4 formats and SDK 0.5.0 and were
+run against a temporary API. See `docs/design/proof-closure.md` §8 C.
+
 **Dashboard status indicators (fixed):** the overview sidebar and the
 Developer page used to show a hard-coded green "Operational" / "API
 operational"; both now use one shared component that checks `GET /health`
