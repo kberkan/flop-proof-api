@@ -141,7 +141,7 @@ verified.
 
 | Capability | Status | Risk | Evidence |
 |---|---:|---:|---|
-| canonical channel_id v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED; verified against live FLOP Devnet data (1020/1020 channels at block #3133177, 2026-11-07), see [docs/evidence/devnet-channel-id-2026-11-07.md](docs/evidence/devnet-channel-id-2026-11-07.md) |
+| canonical channel_id v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED; verified against live FLOP Devnet data (1020/1020 channels at block #3133177, 2026-11-07; 1451/1451 at block #3140697 on re-run), see [docs/evidence/devnet-channel-id-2026-11-07.md](docs/evidence/devnet-channel-id-2026-11-07.md) |
 | Compute-channel verification pipeline | 🟢 | HIGH | CAT-1 — FCC4 decode, VerifiedTurn V0–V3 signature/Merkle verification, collection aggregate_gn checks, and agent receipt v1 are implemented and internally tested |
 | Compute-channel runtime lifecycle | 🔴 | HIGH | CAT-3 — open_channel / force_open / force_ack / settle / force_settle / dispute / finalization runtime semantics are not implemented or externally verified |
 
@@ -227,7 +227,7 @@ ambiguity" above.
 | Capability | Implementation status | External parity |
 |---|---|---|
 | task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; matches @flop-labs/sdk 0.4.0 on 2000 cases |
-| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; also verified against live FLOP Devnet data (1020/1020 channels at block #3133177); matches @flop-labs/sdk 0.4.0 on 2000 cases |
+| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; also verified against live FLOP Devnet data (1020/1020 channels at block #3133177; 1451/1451 at block #3140697 on re-run); matches @flop-labs/sdk 0.4.0 on 2000 cases |
 | Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED |
 | ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |

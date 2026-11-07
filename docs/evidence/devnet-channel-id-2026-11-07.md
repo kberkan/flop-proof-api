@@ -77,3 +77,21 @@ copied.
   when read on 2026-11-07).
 - The devnet can be reset. The result is a dated observation; the genesis
   hash above identifies the chain it was made on.
+
+## Second run (re-run)
+
+Recorded from the maintainer's re-run of the same command; the numbers below
+were supplied for this record and were not re-run when it was written.
+
+| Item | Value |
+|---|---|
+| Network and genesis hash | same as above (`0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631`) |
+| Pinned block | #3140697, `0xa76a5c345aad587918e3011aa055d5aaaa4247c0a946911ac8c1876e85c305ce` |
+| Channels read | 1451 |
+| channel_id_v1 match | **1451 / 1451** |
+| Requests sent | 22 |
+| Script | `scripts/check_devnet_channel_ids.py`, unchanged: sha256 `1e1d50e513b64dd8b0b29a1d1f8c0001f0d4eeec3f138d1bfe7b8da9c8e551a8`, committed in `b535708` |
+
+The first run above is unchanged. The channel count grew from 1020 (block
+#3133177) to 1451 (block #3140697). Same limits as above: a dated observation of data the runtime
+produced, not a check against the runtime source.
