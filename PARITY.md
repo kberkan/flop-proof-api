@@ -141,7 +141,7 @@ verified.
 
 | Capability | Status | Risk | Evidence |
 |---|---:|---:|---|
-| canonical channel_id v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED |
+| canonical channel_id v1 construction | 🟢 | LOW | CANONICAL WIRE VECTOR; INTERNALLY TESTED; verified against live FLOP Devnet data (1020/1020 channels at block #3133177, 2026-11-07), see [docs/evidence/devnet-channel-id-2026-11-07.md](docs/evidence/devnet-channel-id-2026-11-07.md) |
 | Compute-channel verification pipeline | 🟢 | HIGH | CAT-1 — FCC4 decode, VerifiedTurn V0–V3 signature/Merkle verification, collection aggregate_gn checks, and agent receipt v1 are implemented and internally tested |
 | Compute-channel runtime lifecycle | 🔴 | HIGH | CAT-3 — open_channel / force_open / force_ack / settle / force_settle / dispute / finalization runtime semantics are not implemented or externally verified |
 
@@ -151,13 +151,23 @@ CAT-3 implementation is currently BLOCKED by unresolved upstream spec
 ambiguity in FLOP Yellow Paper §12.1, tracked in flop-labs/yellowpaper
 issues (state checked 2026-10-05):
 
-Open:
+Open (state re-checked 2026-11-07):
 
-- #85: settlement_class has no published enum/wire definition.
+- #85: settlement_class has no published enum/wire definition in the Yellow
+  Paper. The devnet runtime metadata (spec 1014014, 2026-11-07) types it as
+  `pallet_compute_channel::pallet::SettlementClass` with two variants,
+  `Standard` (index 0) and `CertificatePremium` (index 1). That names the
+  values and their SCALE indices as deployed; what each class does on
+  `settle` / `force_settle` is not in the metadata, and without the runtime
+  source it is not known. We do not implement settlement_class encoding.
 - #48: reservation-cap slot-release semantics on force_settle->finalize
   close are ambiguous between two readings.
+
+Closed:
+
 - #77: Appendix D fee formula conflicts with Appendix A parameters for
-  zero-G_n extrinsics.
+  zero-G_n extrinsics. Closed 2026-10-13 upstream (the earlier "open" entry
+  here was stale). Not re-audited against the current Yellow Paper text.
 
 Closed (both on 2026-09-24, "addressed in the 0.5.0 (draft) sync, commit
 3c97bbc"):
@@ -174,7 +184,7 @@ The two closures do not lift the CAT-3 block. #4 resolved a wording
 conflict that never blocked our implementation. #33 fixes the unit, but its
 closing comment records the follow-on question (what an agent recovers through
 a unilateral `force_settle` at the placeholder tariff) as open item E.24, and
-#85, #48 and #77 remain open.
+#85 and #48 remain open. (#77 has since been closed, 2026-10-13.)
 
 Until these are resolved upstream (or we find a canonical flop-core
 source), we do not implement open_channel/settle/force_settle/dispute
@@ -182,7 +192,17 @@ runtime state, tariff computation, or settlement_class encoding, to
 avoid inventing protocol semantics.
 
 The canonical `channel_id` v1 primitive is implemented and internally
-verified against the public wire-format vector. The deterministic primitive
+verified against the public wire-format vector. It is also **verified against
+live FLOP Devnet data (1020/1020 channels at block #3133177)**, devnet genesis
+`0x99c172c0…8be2d631`, 2026-11-07): for every `ComputeChannel.Channels` entry
+the key's channel_id equals `channel_id_v1(genesis, agent, miner, nonce)` with
+the stored agent, miner and nonce
+([evidence](docs/evidence/devnet-channel-id-2026-11-07.md),
+`scripts/check_devnet_channel_ids.py`, offline decoding tests in
+`test_devnet_channel_decoding.py`). The devnet can be reset, so this is a dated
+observation. It checks our primitive against data the runtime produced, **not**
+against the runtime source, which is still not public (see "Runtime-Side
+Tracking"). The deterministic primitive
 binds the protocol/domain tag, version, genesis hash, agent, miner, and
 u64 little-endian nonce.
 
@@ -200,7 +220,7 @@ ambiguity" above.
 | Capability | Implementation status | External parity |
 |---|---|---|
 | task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
-| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
+| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; also verified against live FLOP Devnet data (1020/1020 channels at block #3133177) |
 | Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED |
 | ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
@@ -672,7 +692,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 1129 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 1143 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
@@ -711,6 +731,25 @@ or runtime-parity-confirmed by the Proof API.
 
 Their current state is based on the Yellow Paper specification/status only,
 not on direct runtime source inspection.
+
+**Runtime source not public (checked 2026-11-07).** `flop-labs/flop-core`,
+the repository named by the `@flop-labs/sdk` package, returns 404; the public
+`flop-labs` repositories are `yellowpaper`, `network` (issue tracker), `tclk`,
+`technocore-chat`, `codescape` and `.github`. Two further sources now exist,
+and neither is the runtime source:
+
+- the FLOP Devnet runtime metadata (read-only RPC, spec `tzkv-runtime`
+  1014014): pallets, storage, call, event and constant definitions and types
+  (for example `Channel`, `VerifiedTurn`, `ValidatorAttestation`,
+  `SettlementClass`, `MaxMerklePathLen` = 64), plus live storage;
+- `@flop-labs/sdk` 0.4.0 (npm): TypeScript primitives
+  (`compute-channel/transcript.js`: `channelIdV1`, `taskHashV1`,
+  `transcriptLeaf` (V1), `transcriptLeafV2`, `transcriptLeafV3`, `receiptMessage`, …) whose comments claim
+  byte-identity with the pallet and the Rust SDK. That is the vendor's claim,
+  not independent evidence.
+
+Metadata gives types and signatures, not behaviour; live storage gives data the
+runtime produced, not the rules that produced it.
 
 ## §12.1 / VerifiedTurn Spec Verification Note
 

@@ -1,0 +1,358 @@
+{
+ "entry": {
+  "hashers": [
+   2
+  ],
+  "key": 13,
+  "kind": "map",
+  "value": 805
+ },
+ "genesis_hash": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+ "prefix": "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b",
+ "samples": [
+  {
+   "key": "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b000577b28e3ea1e308182683b2de5e83a02ac3e4644a3f7e6f7105ff9d94c121b8cc47bfc5230cc984f2e22d17fd5b12",
+   "nonce": 673570207492730496,
+   "value": "0xd4a6e5ddeffd045fac51bc3ec81937436730cfd8e75433ed81ce01e20d188b793236e1d78b99105c99323b6d0477ccfb172dbe2f2e6aca47a85538d2f7f2ad221a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633060280b7602c5cbe05fc393852db4953816de0f6620e6aae79a9df2133f65d31946f4e9a2e92d699f2a0a713dee2833d111db21d191cc0e92b1defafb6937b64a932bc00388c9b7ffb15000000000000000000040000b00400000100000080eee3f488005909585b2b00585b2b00020001a54fd2255ac39309a4dbcaebc883689ac0ecd6d17387ab68baebb83d01f5ddfd00000000000000000000000000000000"
+  },
+  {
+   "key": "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b00f44a34195cb94c9cb10ce59ab0001ce57f96718c9f2c06f8bf631387033abbbf201b82eb2e611d7162a02125107453",
+   "nonce": 1478799336813029055,
+   "value": "0xd4a6e5ddeffd045fac51bc3ec81937436730cfd8e75433ed81ce01e20d188b79e89f394993b70949edea8dc7453e7f674f520aad47b35d777d586d6ee01d92251a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba63306020081319ab4bea9d04d6aa502d9ee203499b38dd3b7ec35731639273b8220ad06366b207b04b67559fdefc0f1ed3c4d45f538a370ec95ee7012cdddadeb0de32dab0246a7671e02c6000000000000000000040000b004000001000000bfe6d26c29c0851456101e0056101e00020001a54fd2255ac39309a4dbcaebc883689ac0ecd6d17387ab68baebb83d01f5ddfd00000000000000000000000000000000"
+  },
+  {
+   "key": "0x130ba67ef498736437f36679a246a7547759ccc18de172078306ca5973251a7b0145aa025567c26aa0e797f7903e7caa346ce2e84a9ea49ce60a8cba5e36f24309dd86f8d7450e2781adf7821096be49",
+   "nonce": 945387759528373199,
+   "value": "0xd4a6e5ddeffd045fac51bc3ec81937436730cfd8e75433ed81ce01e20d188b796276a6310b257570022a8691224e6e932da4cb86eca8d7fcfadf0790bcae731c1a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba633061a52c1abe781db051e70ae357f72bb70161ca0c092df0b618f22a9292ba6330602a2cb8aae862282ff14b4df46104b7f2db45b67f821ad095c375df1fc6cde1d538edc095031d2898ace4def2442549d35313fd925a88815633d5f07a909dd0d5d0100000000000000000000000000000000040000b004000001000000cfebb08d28b11e0d7e5a2f007e5a2f00020001a54fd2255ac39309a4dbcaebc883689ac0ecd6d17387ab68baebb83d01f5ddfd00000000000000000000000000000000"
+  }
+ ],
+ "source": "https://rpc.devnet.flop.network, state at block 0x575c6e8fb06d7ccc2c75a816224752d88ed7472dedf54b384b058c30330d4a5a (#3133177)",
+ "spec": "tzkv-runtime 1014014",
+ "types": {
+  "0": {
+   "fields": [
+    {
+     "name": null,
+     "ty": 1
+    }
+   ],
+   "kind": "composite",
+   "path": [
+    "sp_core",
+    "crypto",
+    "AccountId32"
+   ]
+  },
+  "1": {
+   "kind": "array",
+   "len": 32,
+   "path": [],
+   "ty": 2
+  },
+  "102": {
+   "kind": "variant",
+   "path": [
+    "Option"
+   ],
+   "variants": [
+    {
+     "fields": [],
+     "idx": 0,
+     "name": "None"
+    },
+    {
+     "fields": [
+      {
+       "name": null,
+       "ty": 13
+      }
+     ],
+     "idx": 1,
+     "name": "Some"
+    }
+   ]
+  },
+  "12": {
+   "kind": "primitive",
+   "name": "u64",
+   "path": []
+  },
+  "13": {
+   "fields": [
+    {
+     "name": null,
+     "ty": 1
+    }
+   ],
+   "kind": "composite",
+   "path": [
+    "primitive_types",
+    "H256"
+   ]
+  },
+  "2": {
+   "kind": "primitive",
+   "name": "u8",
+   "path": []
+  },
+  "246": {
+   "kind": "variant",
+   "path": [
+    "pallet_model_registry",
+    "types",
+    "ModelPrecision"
+   ],
+   "variants": [
+    {
+     "fields": [],
+     "idx": 0,
+     "name": "FP32"
+    },
+    {
+     "fields": [],
+     "idx": 1,
+     "name": "FP16"
+    },
+    {
+     "fields": [],
+     "idx": 2,
+     "name": "BF16"
+    },
+    {
+     "fields": [],
+     "idx": 3,
+     "name": "INT8"
+    },
+    {
+     "fields": [],
+     "idx": 4,
+     "name": "INT4"
+    },
+    {
+     "fields": [],
+     "idx": 5,
+     "name": "Mixed"
+    }
+   ]
+  },
+  "260": {
+   "fields": [
+    {
+     "name": "commitment",
+     "ty": 13
+    },
+    {
+     "name": "provider_id",
+     "ty": 2
+    },
+    {
+     "name": "retention",
+     "ty": 261
+    }
+   ],
+   "kind": "composite",
+   "path": [
+    "pallet_da_registry",
+    "pallet",
+    "DataRef"
+   ]
+  },
+  "261": {
+   "kind": "variant",
+   "path": [
+    "pallet_da_registry",
+    "pallet",
+    "RetentionClass"
+   ],
+   "variants": [
+    {
+     "fields": [],
+     "idx": 0,
+     "name": "Ephemeral"
+    },
+    {
+     "fields": [],
+     "idx": 1,
+     "name": "Leased"
+    }
+   ]
+  },
+  "294": {
+   "fields": [
+    {
+     "name": "max_turns",
+     "ty": 4
+    },
+    {
+     "name": "max_duration",
+     "ty": 4
+    },
+    {
+     "name": "reattest_every",
+     "ty": 4
+    }
+   ],
+   "kind": "composite",
+   "path": [
+    "pallet_compute_channel",
+    "pallet",
+    "Sla"
+   ]
+  },
+  "296": {
+   "kind": "variant",
+   "path": [
+    "Option"
+   ],
+   "variants": [
+    {
+     "fields": [],
+     "idx": 0,
+     "name": "None"
+    },
+    {
+     "fields": [
+      {
+       "name": null,
+       "ty": 260
+      }
+     ],
+     "idx": 1,
+     "name": "Some"
+    }
+   ]
+  },
+  "4": {
+   "kind": "primitive",
+   "name": "u32",
+   "path": []
+  },
+  "6": {
+   "kind": "primitive",
+   "name": "u128",
+   "path": []
+  },
+  "805": {
+   "fields": [
+    {
+     "name": "agent",
+     "ty": 0
+    },
+    {
+     "name": "miner",
+     "ty": 0
+    },
+    {
+     "name": "model_hash",
+     "ty": 13
+    },
+    {
+     "name": "measured_root",
+     "ty": 13
+    },
+    {
+     "name": "precision",
+     "ty": 246
+    },
+    {
+     "name": "enclave_key",
+     "ty": 1
+    },
+    {
+     "name": "agent_key",
+     "ty": 1
+    },
+    {
+     "name": "escrow",
+     "ty": 6
+    },
+    {
+     "name": "sla",
+     "ty": 294
+    },
+    {
+     "name": "nonce",
+     "ty": 12
+    },
+    {
+     "name": "opened_at",
+     "ty": 4
+    },
+    {
+     "name": "last_attested_at",
+     "ty": 4
+    },
+    {
+     "name": "state",
+     "ty": 806
+    },
+    {
+     "name": "transcript_ref",
+     "ty": 296
+    },
+    {
+     "name": "weights_pin",
+     "ty": 102
+    },
+    {
+     "name": "locked_compute_consumed",
+     "ty": 6
+    }
+   ],
+   "kind": "composite",
+   "path": [
+    "pallet_compute_channel",
+    "pallet",
+    "Channel"
+   ]
+  },
+  "806": {
+   "kind": "variant",
+   "path": [
+    "pallet_compute_channel",
+    "pallet",
+    "ChannelState"
+   ],
+   "variants": [
+    {
+     "fields": [],
+     "idx": 0,
+     "name": "Open"
+    },
+    {
+     "fields": [
+      {
+       "name": "final_root",
+       "ty": 13
+      },
+      {
+       "name": "claimed_gn",
+       "ty": 6
+      },
+      {
+       "name": "challenge_end",
+       "ty": 4
+      }
+     ],
+     "idx": 1,
+     "name": "Settling"
+    },
+    {
+     "fields": [],
+     "idx": 2,
+     "name": "Closed"
+    },
+    {
+     "fields": [
+      {
+       "name": "ack_deadline",
+       "ty": 4
+      }
+     ],
+     "idx": 3,
+     "name": "PendingAck"
+    }
+   ]
+  }
+ }
+}
