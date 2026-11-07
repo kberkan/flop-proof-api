@@ -729,6 +729,153 @@ def test_pinned_legacy_leaf_vector_signature_is_invalid_upstream_defect():
     )
 
 
+# -- V2/V3 field rules (yellowpaper.md F.3: "V3 has a policy and non-zero h_ids") ----------
+#
+# Our rules: V3 needs a non-zero h_ids (spec); a zero toploc_commitment_hash is
+# allowed (spec, upstream reference and @flop-labs/sdk agree); decode_policy_hash
+# must be non-zero for V2 and V3 (a deliberately stricter rule, same in every path).
+
+_RULE_CHANNEL_ID = bytes.fromhex(
+    "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+)
+_RULE_PATHS = ["leaf_function", "fcc4_decoder", "verify_turn_proof"]
+
+
+def _rule_fields(leaf_version: int, **overrides) -> dict:
+    fields = {
+        "leaf_version": leaf_version,
+        "turn_index": 7,
+        "h_in": bytes.fromhex("33" * 32),
+        "h_out": bytes.fromhex("44" * 32),
+        "g_n": 42,
+        "decode_policy_hash": bytes.fromhex("66" * 32),
+        "h_ids": bytes.fromhex("55" * 32) if leaf_version == 3 else bytes(32),
+        "toploc_commitment_hash": bytes.fromhex("77" * 32) if leaf_version == 3 else bytes(32),
+        "miner_recv_ms": 10,
+        "miner_done_ms": 20,
+        "latency_ms": 10,
+    }
+    fields.update(overrides)
+    return fields
+
+
+def _rule_leaf_independent(f: dict) -> bytes:
+    """F.3 V2/V3 leaf preimage written out here, not taken from app code."""
+    import hashlib
+
+    preimage = (
+        _RULE_CHANNEL_ID
+        + f["turn_index"].to_bytes(4, "little")
+        + f["h_in"]
+        + f["h_out"]
+        + f["g_n"].to_bytes(16, "little")
+        + f["decode_policy_hash"]
+    )
+    if f["leaf_version"] == 3:
+        preimage += f["h_ids"] + f["toploc_commitment_hash"]
+    preimage += (
+        f["miner_recv_ms"].to_bytes(8, "little")
+        + f["miner_done_ms"].to_bytes(8, "little")
+        + f["latency_ms"].to_bytes(8, "little")
+    )
+    return hashlib.blake2b(preimage, digest_size=32).digest()
+
+
+def _rule_fcc4_blob(f: dict) -> bytes:
+    """The canonical V3 FCC4 blob with version and the three fields replaced."""
+    blob = bytearray(_canonical_fcc4_blob())
+    blob[40] = f["leaf_version"]
+    blob[126:158] = f["decode_policy_hash"]
+    blob[158:190] = f["h_ids"]
+    blob[190:222] = f["toploc_commitment_hash"]
+    return bytes(blob)
+
+
+def _run_rule_path(path: str, leaf_version: int, **overrides):
+    """Run one of the three paths on a V2/V3 turn; returns what the path returns."""
+    f = _rule_fields(leaf_version, **overrides)
+    if path == "leaf_function":
+        from app.crypto import compute_verified_turn_leaf_v0_v1_v2_v3
+
+        args = {k: v for k, v in f.items() if k != "leaf_version"}
+        return bytes.fromhex(
+            compute_verified_turn_leaf_v0_v1_v2_v3(f["leaf_version"], _RULE_CHANNEL_ID, **args)
+        )
+    if path == "fcc4_decoder":
+        from app.compute_channel import decode_fcc4_transcript
+
+        return decode_fcc4_transcript(_rule_fcc4_blob(f))
+    import sr25519
+
+    from app.compute_channel import VerifiedTurnRecord, verify_turn_proof
+
+    leaf = _rule_leaf_independent(f)
+    public_key, private_key = sr25519.pair_from_seed(bytes(range(32)))
+    turn = VerifiedTurnRecord(
+        enclave_sig=sr25519.sign((public_key, private_key), leaf), agent_ack=None, **f
+    )
+    root = verify_turn_proof(
+        channel_id=_RULE_CHANNEL_ID,
+        turn=turn,
+        merkle_index=0,
+        merkle_path=(),
+        expected_root=leaf,
+        enclave_public_key=public_key,
+        expected_decode_policy_hash=None,
+    )
+    return root, leaf
+
+
+@pytest.mark.parametrize("path", _RULE_PATHS)
+def test_v3_turn_with_zero_toploc_commitment_is_accepted(path):
+    """A V3 turn with policy and h_ids, and a zero toploc_commitment_hash, is valid.
+
+    Spec F.3 requires only a policy and a non-zero h_ids for V3, the upstream
+    reference (evidence/compute-channel.py) and @flop-labs/sdk accept a zero
+    TOPLOC commitment. Such a turn claims no per-turn TOPLOC binding (spec F.3:
+    V2 "does not claim V3 token-ID/TOPLOC binding"); R3.1's TOPLOC presence is a
+    channel-level record, not part of the leaf.
+    """
+    zero = bytes(32)
+    result = _run_rule_path(path, 3, toploc_commitment_hash=zero)
+    expected = _rule_leaf_independent(_rule_fields(3, toploc_commitment_hash=zero))
+    if path == "leaf_function":
+        assert result == expected
+    elif path == "fcc4_decoder":
+        (turn,) = result.turns
+        assert turn.leaf_version == 3
+        assert turn.toploc_commitment_hash == zero
+        assert turn.h_ids == bytes.fromhex("55" * 32)
+    else:
+        assert result == (expected, expected)
+
+
+@pytest.mark.parametrize("path", _RULE_PATHS)
+def test_v3_turn_with_zero_h_ids_is_rejected(path):
+    with pytest.raises(ValueError, match="LeafFieldsInconsistent"):
+        _run_rule_path(path, 3, h_ids=bytes(32))
+
+
+@pytest.mark.parametrize("path", _RULE_PATHS)
+def test_v3_turn_with_zero_decode_policy_hash_is_rejected(path):
+    with pytest.raises(ValueError, match="LeafFieldsInconsistent"):
+        _run_rule_path(path, 3, decode_policy_hash=bytes(32))
+
+
+@pytest.mark.parametrize("path", _RULE_PATHS)
+def test_v2_turn_with_zero_decode_policy_hash_is_rejected(path):
+    """Same decode_policy_hash rule for V2 in every path (stricter than the spec text)."""
+    with pytest.raises(ValueError, match="LeafFieldsInconsistent"):
+        _run_rule_path(path, 2, decode_policy_hash=bytes(32))
+
+
+@pytest.mark.parametrize("path", _RULE_PATHS)
+def test_v2_turn_with_policy_and_zero_v3_fields_is_accepted(path):
+    """Control: the consistent V2 turn goes through every path."""
+    result = _run_rule_path(path, 2)
+    assert result is not None
+
+
 def _canonical_v3_turn_proof_kwargs() -> dict:
     from app.compute_channel import VerifiedTurnRecord
 

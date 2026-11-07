@@ -46,15 +46,18 @@ corpus is `evidence/wire-format-v1.json` at yellowpaper `2a2cc82180` (sha256
 `53440d85…e5011de`, the pinned one).
 
 Scripts: `scripts/flop_sdk_parity/parity.py` sha256
-`6e6dc9b62abe171f586709293b0239942048a675e0caae03c1a4074f7a13f4de` and
+`04489857a2681a3a0cacf6604daadb2d70b939f502e0f5e6cd314747e5c20ccc` and
 `scripts/flop_sdk_parity/sdk_run.mjs` sha256
 `5e3621689e8107ea9dede299cb0f5f7fffb348658c585f769b1498054078de0e`; cases file
 sha256 `88c7dab4bf9ca34deef0851f5c5a70c31e002f50dfafe053f5b76fe1c115bcb4`.
 The results above were first obtained with an earlier, standalone copy of
 `parity.py` (sha256 `8ad3f0e1…ba2`; same generator, same seed, same cases file
 hash, same comparison). The repository version adds the `run` driver (pinned
-install and corpus checks, cleanup) and was run once more with the same result:
-31 614 cases, no byte difference. Not part of pytest or CI (it needs
+install and corpus checks, cleanup); its first version (sha256 `6e6dc9b6…f4de`)
+gave the same result as the standalone copy. The hash above is the file after
+the formatting clean-up (same random draws, same cases file) and the V3 rule
+change, and is the one that produced the results in this file: 31 614 cases, no
+byte difference. Not part of pytest or CI (it needs
 `npm install` and the network); see `scripts/flop_sdk_parity/README.md`.
 
 ## Result: no byte difference
@@ -63,7 +66,7 @@ install and corpus checks, cleanup) and was run once more with the same result:
 |---|---:|---:|---|
 | channel_id v1 | 2000 | 1 / 1 | 12 rejected by both |
 | task_hash v1 | 2000 | 1 / 1 | 17 rejected by both |
-| leaf V0, V1, V2, V3 (1500 each) | 6000 (both SDK entry points agree with ours) | 4 / 4 (`leaf_versions` V0–V3) | 25 rejected by both |
+| leaf V0, V1, V2, V3 (1500 each) | 5880 (V0 1500, V1 1500, V2 1380, V3 1500; both SDK entry points agree with ours) | 4 / 4 (`leaf_versions` V0–V3) | 25 rejected by both |
 | receipt v1 | 2000 | 1 / 1 | 4 rejected by both |
 | turn ack | 2000 | 1 / 1 | 4 rejected by both |
 | Merkle root | 1600 (0 to 300 leaves, including 0, 1, 63–65, 127–129, 255, 256) | 1 / 1 | |
@@ -91,22 +94,42 @@ These are input validation and rules, found on inputs where one side rejects.
 3. **Leaf field consistency** (8320 combinations of zero / non-zero
    `decode_policy_hash`, `h_ids`, `toploc_commitment_hash` and timing, per
    version, against the SDK's `leafFieldsConsistent`):
-   - V1 and V2: same answer in all 4160.
+   Result after the V3 rule change of 2026-11-07 (see below); the first run
+   of this comparison is kept under "Result before the V3 rule change".
+   - V1: same answer in all 2080.
    - V0, 130 differences: all with non-zero timing fields. We reject (V0 has no
      timing fields); the SDK ignores timing. Consistent with the spec (V0 is V1
      without the timing fields).
-   - **V3, 780 differences**: the SDK accepts any V3 whose `h_ids` is non-zero;
-     we additionally require `decode_policy_hash` and `toploc_commitment_hash`
-     to be non-zero. The specification text I could find (F.3, `yellowpaper.md`
-     at `2a2cc82180`) says only that `h_ids` MUST be non-zero in FCC4; it does
-     not require the other two to be non-zero. The SDK documents an all-zero
-     `toploc_commitment_hash` for a turn that was not TOPLOC-sampled. On this
-     point **the SDK matches the spec text and our check is stricter than it**.
-     Not changed (report only); worth a decision, since a V3 leaf with a zero
-     TOPLOC commitment or zero decode-policy hash is rejected by
-     `compute_verified_turn_leaf_v0_v1_v2_v3` but accepted by the SDK.
+   - V2, 260 differences: all with a zero `decode_policy_hash` (and zero
+     `h_ids` and TOPLOC). We reject it in every path on purpose (a zero hash
+     is "no policy"); the SDK only needs the policy to be present. The 120 V2
+     leaf inputs with a zero `decode_policy_hash` among the random "valid"
+     cases are the same difference: the SDK hashes them, we raise
+     (`rule_v2_zero_decode_policy_hash` in the output).
+   - V3, 520 differences: all with a zero `decode_policy_hash` (4 of the 8
+     combinations in which `h_ids` is non-zero). A zero `toploc_commitment_hash`
+     now gives the same answer as the SDK.
+   The remaining differences are one deliberate rule: **`decode_policy_hash`
+   must be non-zero for V2 and V3, in every path.** `yellowpaper.md` (F.3) and
+   the SDK ask only that a policy is present.
 4. **Not comparable:** the direct-rail `ValidatorAttestation` signable payload
    and SCALE encoding have no SDK counterpart.
+
+## The V3 rule change (2026-11-07) and the result before it
+
+The first run (before the change) found that our V3 check also required a
+non-zero `toploc_commitment_hash` and `decode_policy_hash`, while the SDK, the
+upstream reference (`evidence/compute-channel.py`) and the specification text
+(F.3: "V3 has a policy and non-zero `h_ids`") require neither. The
+`toploc_commitment_hash` rule was removed and the `decode_policy_hash` rule was
+made the same in all three of our paths (leaf function, FCC4 decoder,
+`verify_turn_proof`) for V2 and V3. In that first run: 6000 valid leaf cases
+byte-identical; `leaf_consistency` V1 and V2 same answer in all 4160, V0 130
+differences, V3 780 differences (the SDK accepts any V3 with a non-zero
+`h_ids`; we also required the other two to be non-zero). On the devnet, 18 V3
+turns read from three `force_settle` extrinsics (blocks #2893845, #2886961,
+#2773600) all have non-zero values in all three fields, so the chain data
+neither shows nor excludes zero values.
 
 ## Reproduce
 

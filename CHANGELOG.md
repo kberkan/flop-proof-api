@@ -53,6 +53,16 @@
 - Added `docs/design/proof-closure.md`; implemented except the dashboard part
   (§8 C).
 
+### Fixed
+- A V3 VerifiedTurn with a zero `toploc_commitment_hash` is no longer rejected
+  (`compute_verified_turn_leaf_v0_v1_v2_v3`, the FCC4 decoder, therefore also
+  `verify_turn_proof`). The specification (F.3: V3 = policy + non-zero `h_ids`),
+  the upstream reference and `@flop-labs/sdk` accept it; such a turn claims no
+  per-turn TOPLOC binding. A zero `h_ids` is still rejected.
+- `decode_policy_hash` must now be non-zero for V2 and V3 in all three paths;
+  the leaf function did not check it for V2 before. Deliberately stricter than
+  the specification, which only needs a policy to be present.
+
 ### Changed
 - The pinned upstream wire-format corpus moves from flop-labs/yellowpaper
   `3c97bbc8d6` to `2a2cc82180` (`SOURCE.json`, `_embedded_wire_vectors.py`,

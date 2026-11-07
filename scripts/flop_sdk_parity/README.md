@@ -29,10 +29,16 @@ The SDK is not a dependency of this repository or of `dashboard/`.
 ## Known differences it reports (not byte differences)
 
 - the SDK does not check byte lengths outside `channelIdV1` and `taskHashV1`;
-- V3 leaf consistency: the SDK requires only a non-zero `h_ids`, we also
-  require non-zero `decode_policy_hash` and `toploc_commitment_hash`
-  (`leaf_consistency` `V3:RULE_DIFF`, 780 combinations); V0 with non-zero
-  timing fields is rejected by us and ignored by the SDK (`V0:RULE_DIFF`, 130).
+- `decode_policy_hash` must be non-zero for V2 and V3 in our code (a zero hash
+  is "no policy"; a deliberately stricter rule than the specification and the
+  SDK, which only need a policy to be present): `leaf_consistency`
+  `V2:RULE_DIFF` 260 and `V3:RULE_DIFF` 520 combinations, and 120 random V2
+  leaf inputs (`rule_v2_zero_decode_policy_hash`);
+- V0 with non-zero timing fields is rejected by us and ignored by the SDK
+  (`V0:RULE_DIFF`, 130).
+
+A zero `toploc_commitment_hash` in a V3 turn is accepted by us and by the SDK
+(since 2026-11-07; before, V3 showed 780 differences, see the evidence file).
 
 ## Changing the pinned SDK version
 

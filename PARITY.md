@@ -246,7 +246,7 @@ difference was found ([evidence](docs/evidence/flop-sdk-parity-2026-11-07.md)).
 |---|---|
 | channel_id v1 | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1 corpus vector) |
 | task_hash v1 | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1) |
-| VerifiedTurn leaf V0, V1, V2, V3 | matches @flop-labs/sdk 0.4.0 on 6000 cases (1500 per version, +4) |
+| VerifiedTurn leaf V0, V1, V2, V3 | matches @flop-labs/sdk 0.4.0 on 5880 cases (V0 1500, V1 1500, V2 1380, V3 1500, +4); the other 120 V2 inputs have a zero `decode_policy_hash`, which we reject on purpose (see the V2/V3 field rules below) |
 | agent receipt v1 | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1) |
 | per-turn agent ack message | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1) |
 | Merkle root, path, root from path | matches @flop-labs/sdk 0.4.0 on 1600 + 1600 + 2000 cases (+corpus) |
@@ -256,10 +256,8 @@ difference was found ([evidence](docs/evidence/flop-sdk-parity-2026-11-07.md)).
 The SDK is built from `flop-labs/flop-core`, but it is not the runtime source
 (`flop-core` is not public); two implementations agreeing is not proof that
 either matches the runtime. Not byte differences, same evidence file: the SDK
-does not check byte lengths outside `channelIdV1`/`taskHashV1`; and for V3
-leaves our fail-closed check also requires a non-zero `decode_policy_hash` and
-`toploc_commitment_hash`, while the SDK (and, as far as the specification text
-says, the spec: only `h_ids` MUST be non-zero) does not. Reported, not changed.
+does not check byte lengths outside `channelIdV1`/`taskHashV1`; and the V3
+field-rule difference found by the first run is **resolved** (below).
 
 **Direct-rail ValidatorAttestation vectors:** Verified against
 flop-labs/yellowpaper `wire-format-v1.json` `direct_rail_v1` at commit
@@ -436,6 +434,31 @@ wire-format-v1 vector corpus (generator and JSON). The order of checks inside
 `verify_turn_proof` is not specified by the spec; the implemented order (field
 consistency and policy, signature, path length, path structure, Merkle
 membership) is an implementation choice. Reported upstream as an ambiguity: flop-labs/yellowpaper#112.
+
+**V2/V3 field rules (2026-11-07).** V3 = a decode policy and a non-zero
+`h_ids` (`yellowpaper.md` F.3: "V3 has a policy and non-zero `h_ids`").
+**Resolved:** our check used to require a non-zero `toploc_commitment_hash` as
+well, which neither the specification text, the upstream reference
+(`evidence/compute-channel.py`: V3 needs a policy and a non-zero `h_ids`; a
+zero TOPLOC commitment is encoded and accepted) nor `@flop-labs/sdk` 0.4.0
+require; it was removed from the leaf function and the FCC4 decoder
+(`verify_turn_proof` goes through the leaf function). A V3 turn with a zero
+`toploc_commitment_hash` is therefore accepted, and it claims **no per-turn
+TOPLOC binding** (F.3: V2 "does not claim V3 token-ID/TOPLOC binding"; R3.1's
+TOPLOC presence is the channel-level `submit_toploc_evidence` record, not part
+of the leaf). Locked by `test_v3_turn_with_zero_toploc_commitment_is_accepted`
+(three paths) and by tests that keep a zero `h_ids` rejected. **Deliberately
+stricter than the specification:** `decode_policy_hash` must be non-zero for V2
+and V3 in all three paths (leaf function, FCC4 decoder, `verify_turn_proof`;
+before, the leaf function did not check it for V2). A zero hash means "no
+policy" and cannot equal a channel's pinned policy hash; the specification
+(F.3) and the SDK only need a policy to be present. Kept on purpose, not
+reported upstream. Devnet check (read-only, 2026-11-07): 18 V3 turns decoded
+from three `force_settle` extrinsics (blocks #2893845: 1 turn, #2886961: 2,
+#2773600: 15) all have non-zero `decode_policy_hash`, `h_ids` and
+`toploc_commitment_hash`, so the chain data neither shows nor excludes zero
+values; whether the runtime accepts a zero TOPLOC commitment is unknown without
+its source.
 
 V0/V1 leaves with non-zero `h_ids` or TOPLOC commitment are rejected with
 `LeafFieldsInconsistent` during leaf hash computation (`app/crypto.py`), before
@@ -746,7 +769,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 1144 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 1159 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

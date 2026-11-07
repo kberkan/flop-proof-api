@@ -553,13 +553,20 @@ def compute_verified_turn_leaf_v0_v1_v2_v3(
         value != 0 for value in (miner_recv_ms, miner_done_ms, latency_ms)
     ):
         raise ValueError("LeafFieldsInconsistent: timing fields")
-    # V3 explicitly binds both h_ids and TOPLOC.
-    if leaf_version == 3 and (
-        decode_policy_hash == zero32
-        or h_ids == zero32
-        or toploc_commitment_hash == zero32
-    ):
-        raise ValueError("LeafFieldsInconsistent: V3 bindings")
+    # V2 and V3 carry the channel's pinned decode policy. The spec asks only
+    # that a policy is present; a zero hash is "no policy" and cannot equal a
+    # pinned one, so it is rejected here, in the FCC4 decoder and in
+    # verify_turn_proof alike. Deliberately stricter than yellowpaper.md.
+    if leaf_version in (2, 3) and decode_policy_hash == zero32:
+        raise ValueError("LeafFieldsInconsistent: decode_policy_hash")
+    # V3 = policy + non-zero h_ids (yellowpaper.md F.3: "V3 has a policy and
+    # non-zero `h_ids`"). toploc_commitment_hash is not constrained: a V3 turn
+    # with a zero one claims no per-turn TOPLOC binding (F.3: V2 "does not claim
+    # V3 token-ID/TOPLOC binding"; R3.1's TOPLOC presence is the channel-level
+    # submit_toploc_evidence record). The upstream reference and @flop-labs/sdk
+    # accept it too.
+    if leaf_version == 3 and h_ids == zero32:
+        raise ValueError("LeafFieldsInconsistent: V3 h_ids")
 
     preimage = (
         channel_id

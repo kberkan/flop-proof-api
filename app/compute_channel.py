@@ -102,7 +102,9 @@ def _validate_leaf_fields(
     else:
         if has_policy != 1 or decode_policy_hash == zero:
             raise ValueError("LeafFieldsInconsistent")
-        if h_ids == zero or toploc_commitment_hash == zero:
+        # V3 = policy + non-zero h_ids (yellowpaper.md F.3); a zero
+        # toploc_commitment_hash is allowed (no per-turn TOPLOC binding).
+        if h_ids == zero:
             raise ValueError("LeafFieldsInconsistent")
 
 
