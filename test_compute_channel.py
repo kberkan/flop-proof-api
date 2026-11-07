@@ -572,9 +572,9 @@ def test_verify_receipt_rejects_wrong_agent_signature(monkeypatch):
 
 
 # wire-format-v1 negative case `legacy_leaf_current_channel`, copied verbatim
-# from flop-labs/yellowpaper@3c97bbc8d6 evidence/wire-format-v1.json.
+# from flop-labs/yellowpaper@2a2cc82180 evidence/wire-format-v1.json.
 LEGACY_LEAF_CURRENT_CHANNEL_HEX = (
-    "01ffffffff333333333333333333333333333333333333333333333333333333"
+    "0100000000333333333333333333333333333333333333333333333333333333"
     "3333333333444444444444444444444444444444444444444444444444444444"
     "4444444444ffffffffffffffffffffffffffffffff0000000000000000000000"
     "0000000000000000000000000000000000000000000000000000000000000000"
@@ -582,9 +582,7 @@ LEGACY_LEAF_CURRENT_CHANNEL_HEX = (
     "000000000000000000000000000000000000000000fdfffffffffffffffeffff"
     "ffffffffff01000000000000001454f6cf53b85cd7a0665ef54785cb037bb046"
     "4270b42fc0760ba28482eee44eaa482284b51d7e23558bf5e844eca10b3c2b62"
-    "f95504fccf2c4d57e86b910180084a3632de6913f0502c6313499b29d0976b08"
-    "5a4612e14e017c5eaf065b1c6c2d005f0ff24a5b34ae51d68c9e76052c5aabc0"
-    "b6715d0cf78b18383d56da2a6ff85200"
+    "f95504fccf2c4d57e86b91018000"
 )
 
 
@@ -656,7 +654,7 @@ def test_verify_turn_proof_rejects_legacy_leaf_on_pinned_policy_channel():
     from app.compute_channel import verify_turn_proof
 
     blob = bytes.fromhex(LEGACY_LEAF_CURRENT_CHANNEL_HEX)
-    assert len(blob) == 336
+    assert len(blob) == 270
 
     turn, merkle_path = _decode_verified_turn_scale(blob)
     assert turn.leaf_version == 1
@@ -677,6 +675,58 @@ def test_verify_turn_proof_rejects_legacy_leaf_on_pinned_policy_channel():
             ),
             expected_decode_policy_hash=bytes.fromhex("66" * 32),
         )
+
+
+def test_pinned_legacy_leaf_vector_signature_is_invalid_upstream_defect():
+    """The pinned `legacy_leaf_current_channel` vector fails two checks, not one.
+
+    Upstream b03378c changed the vector's turn_index (0xFFFFFFFF -> 0) and its
+    Merkle path (two steps -> empty) but kept the old enclave_sig constant, and
+    turn_index is part of the F.3 V1 leaf preimage, so the signature no longer
+    verifies over the V1 leaf. Reported in flop-labs/yellowpaper#112.
+
+    Our rejection (UnsupportedLeafVersion, previous test) rests on the leaf
+    version check, which runs before the signature check, so it does not depend
+    on this. This test is a trip wire: it fails when upstream re-signs the
+    vector, which means the pin should be moved again (SOURCE.json,
+    _embedded_wire_vectors.py, LEGACY_LEAF_CURRENT_CHANNEL_HEX, PARITY.md).
+    """
+    import dataclasses
+
+    from app.crypto import (
+        compute_verified_turn_leaf_v0_v1_v2_v3,
+        verify_verified_turn_leaf_signature,
+    )
+
+    channel_id = bytes.fromhex(
+        "3655fa5a95712c31f0bd2380aa8193b30c78bd955e4e966abb0d9f49d66e8d28"
+    )
+    enclave_key = bytes.fromhex(
+        "207b3ee770b7213b7e76bdb32702e2e166a8fea8a125613d6e98c765f5a06d40"
+    )
+    turn, _ = _decode_verified_turn_scale(bytes.fromhex(LEGACY_LEAF_CURRENT_CHANNEL_HEX))
+    assert turn.leaf_version == 1
+
+    def v1_leaf(t) -> bytes:
+        return bytes.fromhex(
+            compute_verified_turn_leaf_v0_v1_v2_v3(
+                t.leaf_version, channel_id, t.turn_index, t.h_in, t.h_out, t.g_n,
+                miner_recv_ms=t.miner_recv_ms,
+                miner_done_ms=t.miner_done_ms,
+                latency_ms=t.latency_ms,
+            )
+        )
+
+    # The vector as published: the signature does not verify.
+    assert turn.turn_index == 0
+    assert not verify_verified_turn_leaf_signature(
+        enclave_key, turn.enclave_sig, v1_leaf(turn)
+    )
+    # Cause: it was made over the earlier turn_index.
+    earlier = dataclasses.replace(turn, turn_index=0xFFFFFFFF)
+    assert verify_verified_turn_leaf_signature(
+        enclave_key, turn.enclave_sig, v1_leaf(earlier)
+    )
 
 
 def _canonical_v3_turn_proof_kwargs() -> dict:

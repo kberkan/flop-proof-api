@@ -54,6 +54,15 @@
   (§8 C).
 
 ### Changed
+- The pinned upstream wire-format corpus moves from flop-labs/yellowpaper
+  `3c97bbc8d6` to `2a2cc82180` (`SOURCE.json`, `_embedded_wire_vectors.py`,
+  `LEGACY_LEAF_CURRENT_CHANNEL_HEX`). 33 of the 34 registered values are
+  unchanged; `negative_cases.legacy_leaf_current_channel` changed
+  (`turn_index` 0, empty Merkle path, 270 bytes instead of 336). Its
+  `enclave_sig` was not re-made upstream and does not verify over the V1 leaf
+  (flop-labs/yellowpaper#112); our `UnsupportedLeafVersion` rejection rests on
+  the version check and is unchanged. `test_pinned_legacy_leaf_vector_signature_is_invalid_upstream_defect`
+  fails when upstream fixes it, as a signal to move the pin again.
 - `POST /proofs` and `POST /proofs/{proof_id}/events` answer a malformed
   signature or signer DID with 422 ("Invalid signature encoding", "Invalid
   from_did", "Invalid actor_did") instead of 401; a well-formed signature that

@@ -43,7 +43,7 @@ JSON file without running the service.
   distinct-validator quorum and `report_data` binding are covered by this
   repository's tests. Validators come from a local registry.
 - `task_hash` v1, `channel_id` v1 and `report_data` v1 match the upstream
-  `wire-format-v1.json` vectors (flop-labs/yellowpaper at `3c97bbc8d6`).
+  `wire-format-v1.json` vectors (flop-labs/yellowpaper at `2a2cc82180`).
 
 ### What it does not verify
 
@@ -349,14 +349,14 @@ environment, and removes both afterwards; extra arguments go to pytest. It
 refuses to start if 127.0.0.1:8000 is already in use. Running `pytest` without
 the script uses `./proofs.db` and may write test data to it.
 
-Current regression status: **1129 passed**
+Current regression status: **1144 passed**
 
 ## Test vectors
 
 Some tests embed hash, preimage and signature values taken unchanged from
-[`evidence/wire-format-v1.json`](https://github.com/flop-labs/yellowpaper/blob/3c97bbc8d6ba68cf2ea003ab88bc154aafdf105e/evidence/wire-format-v1.json)
+[`evidence/wire-format-v1.json`](https://github.com/flop-labs/yellowpaper/blob/2a2cc8218048a2933071bb2f45d75335560e39d8/evidence/wire-format-v1.json)
 in [flop-labs/yellowpaper](https://github.com/flop-labs/yellowpaper)
-(commit `3c97bbc8d6`; Copyright (c) 2026 FLOP Labs). The corpus itself is not copied into this
+(commit `2a2cc82180`; Copyright (c) 2026 FLOP Labs). The corpus itself is not copied into this
 repository. Its commit, URL, size and sha256 are pinned in
 `tests/fixtures/flop-yellowpaper/SOURCE.json`, and
 `python scripts/check_wire_vectors.py` downloads it and checks every embedded

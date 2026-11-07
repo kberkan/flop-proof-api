@@ -153,9 +153,16 @@ issues (state checked 2026-10-05):
 
 Open (state re-checked 2026-11-07):
 
-- #85: settlement_class has no published enum/wire definition in the Yellow
-  Paper. The devnet runtime metadata (spec 1014014, 2026-11-07) types it as
-  `pallet_compute_channel::pallet::SettlementClass` with two variants,
+- #85: the Yellow Paper (`2a2cc82180`) now lists `SettlementClass` in F.3
+  (`Standard=0`, `CertificatePremium=1`), matching the devnet metadata below.
+  The issue stays open: `ModelPrecision`, the `precision` argument of
+  `open_channel`, still has no enum with discriminants in the spec text (0
+  occurrences; the only list is the glossary order FP16 / INT8 / INT4, which
+  would make FP16 `00`, while the upstream fixture encodes FP16 as `01`). The
+  devnet metadata lists `ModelPrecision` as `FP32, FP16, BF16, INT8, INT4,
+  Mixed`, so FP16 = 1: consistent with the fixture. The devnet runtime
+  metadata (spec 1014014, 2026-11-07) types `SettlementClass` as
+  `pallet_compute_channel::pallet::SettlementClass` with the same two variants,
   `Standard` (index 0) and `CertificatePremium` (index 1). That names the
   values and their SCALE indices as deployed; what each class does on
   `settle` / `force_settle` is not in the metadata, and without the runtime
@@ -232,7 +239,7 @@ ambiguity" above.
 
 **Direct-rail ValidatorAttestation vectors:** Verified against
 flop-labs/yellowpaper `wire-format-v1.json` `direct_rail_v1` at commit
-`3c97bbc8d6`: the 179-byte signable payload and 275-byte SCALE encoding match
+`2a2cc82180` (the same values as at `3c97bbc8d6`, which was the pin before): the 179-byte signable payload and 275-byte SCALE encoding match
 byte-for-byte, and the published validator signature verifies. The corpus
 generation metadata lists a single signature-generation command, an upstream
 Rust SDK example (`sdk/rust-compute-channel`). This suggests the published
@@ -242,13 +249,22 @@ against a live FLOP runtime.
 
 **Compute-channel negative vectors:** Rejection behavior matches the
 canonical negative vectors for the covered cases. The rejection names come
-from two sources (flop-labs/yellowpaper `3c97bbc8d6`): `BadReceiptSignature`,
+from two sources (flop-labs/yellowpaper `2a2cc82180`; the same names as at
+`3c97bbc8d6`): `BadReceiptSignature`,
 `UnsupportedLeafVersion` and `MerklePathTooLong` appear in the spec text
 (Appendix G.1, `settle` row); `DuplicateVerifiedTurn`, `LeafNotInRoot`,
 `LeafFieldsInconsistent` and `BadValidatorSignature` appear only in the
 wire-format corpus (`evidence/wire-format-v1.json`, `expected`) and its
 generator (`evidence/generate-wire-format-vectors.py`), not in
-`yellowpaper.md`. A path longer than 64 items (`CHANNEL_MAX_MERKLE_PATH_LEN`, defined once in `app/crypto.py` from upstream `channel_max_merkle_path_len` and shared by `verify_turn_proof` and `verify_merkle_path`) raises `MerklePathTooLong`, and
+`yellowpaper.md` (re-checked at `2a2cc82180`: still 0 occurrences of the four
+names). Since upstream `b03378c`, `evidence/wire-format-v1.schema.json` pins
+the corpus `expected` field to an enum that includes the four names
+(`reject DuplicateVerifiedTurn`, `reject LeafNotInRoot`,
+`reject LeafFieldsInconsistent`, `reject BadValidatorSignature`, with
+`reject BadReceiptSignature`, `reject UnsupportedLeafVersion`, `reject` and
+`different channel_id`): partial progress on #112, but the names are still
+not in the specification text, and the enum has no name for an invalid enclave
+signature. A path longer than 64 items (`CHANNEL_MAX_MERKLE_PATH_LEN`, defined once in `app/crypto.py` from upstream `channel_max_merkle_path_len` and shared by `verify_turn_proof` and `verify_merkle_path`) raises `MerklePathTooLong`, and
 wrong orientation or root mismatch raises `LeafNotInRoot`; `InvalidMerkleProof`
 remains only for structural errors that neither the spec nor the corpus names
 (malformed path item, `u32` index overflow). Reported upstream as an ambiguity: flop-labs/yellowpaper#112. The `wrong_path_orientation` vector is now tested
@@ -260,7 +276,18 @@ checking (`submit_validator_attestations/check_one`).
 `legacy_leaf_current_channel` is now tested with the vector bytes; the pinned
 policy used is `0x66 * 32` (the generator binds no separate policy to this
 case), and because the policy check runs before signature and Merkle checks,
-the result does not depend on that value. `legacy_receipt_current_channel` is
+the result does not depend on that value. **Upstream defect in this vector:**
+in `2a2cc82180` (changed in `b03378c`) it has `turn_index` 0 and an empty
+Merkle path, but its `enclave_sig` is the constant made for the earlier
+`turn_index` 0xFFFFFFFF, and `turn_index` is part of the F.3 V1 leaf preimage,
+so the signature does not verify over the V1 leaf. The vector therefore fails
+two checks, the leaf-version check and the signature check. Our rejection
+(`UnsupportedLeafVersion`) rests on the version check, which runs first, so it
+is unaffected; a signature-first verifier would reject it under a reason with
+no published name. Reported upstream in flop-labs/yellowpaper#112 (still open).
+`test_pinned_legacy_leaf_vector_signature_is_invalid_upstream_defect` pins the
+defect as a trip wire: it fails once upstream re-signs the vector, and the pin
+must then be moved again. `legacy_receipt_current_channel` is
 now tested with the vector bytes and is rejected with `BadReceiptSignature`;
 its control tests monkeypatch `verified_work_from_turns`, so they prove only
 the receipt-signature layer. `invalid_validator_signature` is now tested with
@@ -403,8 +430,8 @@ is not recorded. From `d92f6d7` onward they run in CI (273 passed), and
 
 **Vector revision:** The canonical V3 turn tests use the enclave
 key/signature pair (`207b…`/`2e60…`) published at upstream commit
-`3c97bbc8d6`, and the test FCC4 transcript blob matches that commit's
-`fcc4_transcript_blob_hex` byte-for-byte. Earlier revisions of these tests used
+`3c97bbc8d6` (unchanged at the current pin `2a2cc82180`), and the test FCC4
+transcript blob matches `fcc4_transcript_blob_hex` byte-for-byte at both. Earlier revisions of these tests used
 the pair (`b412…`/`94f2…`) from an earlier revision of `wire-format-v1.json`
 (flop-labs/yellowpaper `3eaf2f25bc`). Leaf hashes, the Merkle root/path and all
 non-signature FCC4 bytes are the same in both revisions; only the enclave key
@@ -412,8 +439,11 @@ and its randomized sr25519 signature differ, and both pairs verify against the
 same V3 leaf hash. `b412…` remains in use as the agent receipt key, which is
 unchanged upstream. The direct-rail validator values also changed
 between upstream revisions (`3eaf2f25bc`: `b41236c5…`/`90cdb722…` →
-`3c97bbc8d6`: `28cc07a9…`/`729d579c…`); the validator vector tests use
-`3c97bbc8d6`. `scripts/check_wire_vectors.py` checks the values registered in
+`3c97bbc8d6`: `28cc07a9…`/`729d579c…`, unchanged at `2a2cc82180`); the
+validator vector tests use the current pin. In the move from `3c97bbc8d6` to
+`2a2cc82180` (2026-11-07) 33 of the 34 registered values were unchanged; the
+one that changed is `negative_cases.legacy_leaf_current_channel.bytes_hex`
+(`turn_index`, Merkle path; see above). `scripts/check_wire_vectors.py` checks the values registered in
 `_embedded_wire_vectors.py` against the pinned corpus, and also scans every hex
 string constant of at least 64 characters in the root `test_*.py` files. CI
 fails when such a value appears in the current corpus but is not registered, or
@@ -431,8 +461,8 @@ files other than the root test files. The stale enclave pair in
 | Capability | Status | Risk | Exact nuance | Evidence |
 |---|---:|---:|---|---|
 | 12-field representation | 🟢 | LOW | Required fields represented | SPEC-CONFORMANT; INTERNALLY TESTED |
-| First 10 fields signed | 🟢 | LOW | 179-byte signed subset | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 3c97bbc8d6) |
-| Full SCALE representation | 🟢 | LOW | 275 B contract | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 3c97bbc8d6) |
+| First 10 fields signed | 🟢 | LOW | 179-byte signed subset | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 2a2cc82180) |
+| Full SCALE representation | 🟢 | LOW | 275 B contract | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 2a2cc82180) |
 | sr25519 signatures | 🟢 | LOW | Signature verification implemented | SPEC-CONFORMANT; INTERNALLY TESTED; CANONICAL WIRE VECTOR — VERIFIED (direct_rail_v1, 3c97bbc8d6) |
 | Exact tuple agreement | 🟢 | LOW | Required signed fields agree | SPEC-CONFORMANT; INTERNALLY TESTED |
 | Distinct-validator quorum | 🟢 | LOW | Internally verified quorum behavior | SPEC-CONFORMANT; INTERNALLY TESTED |
@@ -692,7 +722,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 1143 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 1144 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 
