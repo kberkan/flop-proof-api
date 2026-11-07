@@ -226,8 +226,8 @@ ambiguity" above.
 
 | Capability | Implementation status | External parity |
 |---|---|---|
-| task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
-| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; also verified against live FLOP Devnet data (1020/1020 channels at block #3133177) |
+| task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; matches @flop-labs/sdk 0.4.0 on 2000 cases |
+| channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; also verified against live FLOP Devnet data (1020/1020 channels at block #3133177); matches @flop-labs/sdk 0.4.0 on 2000 cases |
 | Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED |
 | ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
@@ -236,6 +236,30 @@ ambiguity" above.
 | output_hash binding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
 | report_data construction / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Canonical DecodePolicy v1 encoding | IMPLEMENTED (internal-test-verified) | UNVERIFIED |
+
+**Parity with the official `@flop-labs/sdk` 0.4.0 (2026-11-07):** our
+primitives produce the same bytes as the SDK's `transcript.js` on fixed-seed
+inputs, boundary values included, and on the pinned corpus vectors; no byte
+difference was found ([evidence](docs/evidence/flop-sdk-parity-2026-11-07.md)).
+
+| Primitive | Result |
+|---|---|
+| channel_id v1 | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1 corpus vector) |
+| task_hash v1 | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1) |
+| VerifiedTurn leaf V0, V1, V2, V3 | matches @flop-labs/sdk 0.4.0 on 6000 cases (1500 per version, +4) |
+| agent receipt v1 | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1) |
+| per-turn agent ack message | matches @flop-labs/sdk 0.4.0 on 2000 cases (+1) |
+| Merkle root, path, root from path | matches @flop-labs/sdk 0.4.0 on 1600 + 1600 + 2000 cases (+corpus) |
+| legacy receipt message, `h_ids` | SDK-only; the SDK equals the spec formula on 2000 cases each; we have no function for them |
+| direct-rail ValidatorAttestation | not in the SDK; not compared |
+
+The SDK is built from `flop-labs/flop-core`, but it is not the runtime source
+(`flop-core` is not public); two implementations agreeing is not proof that
+either matches the runtime. Not byte differences, same evidence file: the SDK
+does not check byte lengths outside `channelIdV1`/`taskHashV1`; and for V3
+leaves our fail-closed check also requires a non-zero `decode_policy_hash` and
+`toploc_commitment_hash`, while the SDK (and, as far as the specification text
+says, the spec: only `h_ids` MUST be non-zero) does not. Reported, not changed.
 
 **Direct-rail ValidatorAttestation vectors:** Verified against
 flop-labs/yellowpaper `wire-format-v1.json` `direct_rail_v1` at commit
