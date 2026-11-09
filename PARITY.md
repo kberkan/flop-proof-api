@@ -228,7 +228,7 @@ ambiguity" above.
 |---|---|---|
 | task_hash construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; matches @flop-labs/sdk 0.4.0 on 2000 cases |
 | channel_id v1 construction | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED; also verified against live FLOP Devnet data (1020/1020 channels at block #3133177; 1451/1451 at block #3140697 on re-run); matches @flop-labs/sdk 0.4.0 on 2000 cases |
-| Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED |
+| Compute-channel verification pipeline | IMPLEMENTED (internal-test-verified) | CANONICAL FCC4 / VerifiedTurn / Merkle / receipt vectors — VERIFIED; leaf, enclave signature, Merkle root and receipt also agree with 6 sessions settled on FLOP Devnet (sample, see below) |
 | ValidatorAttestation representation / SCALE encoding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | sr25519 signed payload / binding | IMPLEMENTED (internal-test-verified) | CANONICAL WIRE VECTOR — VERIFIED |
 | Quorum arithmetic (`ceil(active_count × threshold).max(1)`) | IMPLEMENTED (internal-test-verified) | N/A — protocol-defined arithmetic; no runtime-specific byte-level parity claim |
@@ -258,6 +258,26 @@ The SDK is built from `flop-labs/flop-core`, but it is not the runtime source
 either matches the runtime. Not byte differences, same evidence file: the SDK
 does not check byte lengths outside `channelIdV1`/`taskHashV1`; and the V3
 field-rule difference found by the first run is **resolved** (below).
+
+**Live settled sessions of our own devnet miner (2026-11-09):** for 6 of the 37
+sessions settled in one miner log (3 chosen by hand, 3 random with a fixed seed; 7
+turns, all V3), the leaf hash, `enclave_sig` under the miner's session key, Merkle
+root against the on-chain `final_root` and `aggregate_gn`, computed with our
+functions, agree with the `settle` extrinsic the runtime accepted (`Settled`,
+`cooperative: true`, `ExtrinsicSuccess`). All six were checked with
+`scripts/check_devnet_own_miner_turns.py` (sha256 in the evidence file), every
+check passing; `channel_id_v1` matches for all 77 channels of the log. **The
+other 31 sessions were not checked** (the RPC has no tx-hash lookup, so locating one
+costs about 10 requests). Agent receipt v1 also verifies in all six, with `payable` =
+the channel's `escrow`; that rule rests on a comment in `@flop-labs/sdk`, not on the
+runtime source. All checked turns have a non-zero `toploc_commitment_hash`, so this
+says nothing about zero values. Not interpreted: `turns_committed` (1 in all six, the
+two-turn session included) and the 40 channels closed without a settle line. This
+checks data the runtime accepted, not the runtime source, and the turns come from
+the vendor's miner software
+([evidence](docs/evidence/devnet-own-miner-turns-2026-11-09.md),
+`scripts/check_devnet_own_miner_turns.py`, not in CI; offline tests in
+`test_devnet_own_miner_turns.py`).
 
 **Direct-rail ValidatorAttestation vectors:** Verified against
 flop-labs/yellowpaper `wire-format-v1.json` `direct_rail_v1` at commit
@@ -769,7 +789,7 @@ When implementation changes:
 2. Run regression tests.
 3. Only then update higher-level product surfaces.
 
-**Current test baseline:** 1159 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
+**Current test baseline:** 1189 passed (`scripts/run_tests.sh`, which uses a temporary database; plain `pytest` may write test data to `./proofs.db`).
 
 # 19. Phase 4 Closure — G_n Reference Artifact
 

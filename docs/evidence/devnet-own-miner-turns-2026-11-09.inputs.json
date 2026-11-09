@@ -1,0 +1,97 @@
+{
+ "note": "Public data only: everything here can be read from the chain. No raw miner log.",
+ "network": "FLOP Devnet",
+ "genesis_hash": "0x99c172c095340ace980631f9123544c6bebd4839f3437e463533422d8be2d631",
+ "miner_account": "0x44beeb4354bdd0aa52a2b8cc8c3b626c67eb1dec3785658425ce7115ac885e46",
+ "enclave_public_key": "0xc89633cb3190c5c391c2fa9aaa660582a73874c01a66c6fe8f7cd7c0bb650059",
+ "random_selection": {
+  "seed": 20261109,
+  "method": "random.Random(seed).sample(sorted(population), 3)",
+  "population_settle_txs": [
+   "0x019131b1713f72ae4199c3e03f4c1d952a55231c049bbe7f9f7fed3876f79a5c",
+   "0x02fe37bdb0ec4f1c74b7ecf74113cb043b15f2fb083b9c73f8f403009cbba555",
+   "0x0484c1083d3f1301c49c51b90fb70cf817eb560b10557f58ff47a5dfa2099021",
+   "0x12e602fd7e8f8992600df1a6b26435772f2ff882d6ffe8ecf42ffdf22459fd74",
+   "0x19a7b02f3d9b531e71797a49930f93e9122d8b8b3f865897d966a095fd0161dc",
+   "0x3c2363384e0039bf24abc2e9e4e5817f5100dcf6695685b06097c0f53d5cd0c7",
+   "0x3efb42b4413b2160b4762702c4d387fb0e911d52c9f8d7060c41bbd47c330df9",
+   "0x42c44782974c1e1db696ae5db850c597c70b0088ff807e2ed87f4b6be1e3bc64",
+   "0x4437cf54c7bfced436cec9f399ce229b27145873c7839b7e9f2d3625d79148e2",
+   "0x45e2189ba3ed25c18f1bbc1c481e41f886245f0c145c3913ad3fda00b5bd754e",
+   "0x4d9605bac8f3a987f42bfc68b70d40e1fa50eda4fef22e00ed2e42062060cdb0",
+   "0x4df3a0fd1da4f18ef9301ef1e7297b5b59eafd7ee0f772eac9572cac4adf5f3e",
+   "0x500977ea02c22f8346e59747645200e4cef98d016fb2062e8e15654488b61402",
+   "0x6031eccde22074f416f3dede977a45e91cb95c956572cbcd36adc8b00399bcd2",
+   "0x69fedc169e3f4ea62259ea55c364d22600e2dae9432b4b5386f2d5f39ec88daa",
+   "0x7ec6a5e02f7fc7abce8232a7a1649380c46a43090c336adcae8812b050c48c29",
+   "0x83fc154d140cd5ba704d512ab8477df42dbe2c5bf16c8481e0e63e7e3795982b",
+   "0x895824767c9d3c27d2203681e8464924d54e8d19b2bbfbf4831ec1fe4b416d55",
+   "0x9259916eaf6bdad17bcaf099da36e5222886dfccf7a05df9d933f7e3e13d51cc",
+   "0x9cf78cd3a056d8777a1a8b76576e27d88505b147ae88a54bf29b847135a7c588",
+   "0x9e0fb9db57a3c3c3a5f2be6e44e12a179b0700cd809badd246aa586f2754952c",
+   "0x9f6a43deea9d6f9b7b09f395e587a3aa216877d41eea77e75a39a0185d15b875",
+   "0xa0009e7da19c51d8a25fc9972edfc93ae30ed6c3eb56cecc73105366c43970f3",
+   "0xa6089f4a1f47f03df1dfe6443ec2dee02c33c97c039af41b5b1c3af0fc1a3c07",
+   "0xa627333fac0e94a7b33a92f69ce579a934526582a4125dfe31b97351dc7eac8a",
+   "0xa9948d2bcabceee2c30bc5faaa63e9bd082aee3132b8b727c8e98e8a4eadbee8",
+   "0xac6b36f2cd2aedaa15518456fa8d6b331aee2f69c19f4e5677dc513fa69293a7",
+   "0xaf00a156e5a071eab5c2f412c38f015a74841e2adddda9336351b6c8e23e799c",
+   "0xb74ab85df9648f743aa4725b97cf0776e9d276efb9962abe3c1181ee3153b06c",
+   "0xc4e065df07a420374b0c1e5b6eb0d384e52e8a8069c3415cce86dcb4b48655a8",
+   "0xd0bd6059982019676192899fbe0e7efb945c5725cc5c59f6367dd2b922f33c70",
+   "0xd62ce5f1af0cbb1c3237b5907660acf4be83fa34b9e66847e534a749455876ee",
+   "0xd9d4b88b971c39fafb823c7c321bcdf2847981465106c066bfb107bee9e4061f",
+   "0xf5a4b0a457561076d69070f9db8f60c81726a31b82859a3f1e5a47fc2aa44000"
+  ]
+ },
+ "sessions": [
+  {
+   "channel_id": "0x1be6e56d5064bd16dc8f2af9357b79a002d45112cfad2b5a9f0e86a777ebb69b",
+   "settle_tx": "0x29e2e758a15cd4cfd390bf0b1bbd72bbfe1648e9c40c697b4d56ada6495b16a0",
+   "settle_block": 3232613,
+   "gn": 127,
+   "miner_paid": "377190000000000002",
+   "selection": "chosen"
+  },
+  {
+   "channel_id": "0x005d1fa1c8cbc36b89d24d2dce5c2ede3411e15cdc96523c484b52e9e4e6676e",
+   "settle_tx": "0x8318fb2e5627f06d252673e823fa030e8ea68c3d51548e8027affa82769040d9",
+   "settle_block": 3236362,
+   "gn": 16,
+   "miner_paid": "47520000000000002",
+   "selection": "chosen"
+  },
+  {
+   "channel_id": "0x6eaa86e1c78465545ee31a33fe491a04fde4663fa6c91123ae43863836f5cd1f",
+   "settle_tx": "0x914cef96cc8b04ae6fb4d323dfc5d99df6dbacc9299f4cb37565b036937f36ef",
+   "settle_block": 3283590,
+   "gn": 379,
+   "miner_paid": "1125630000000000003",
+   "selection": "chosen"
+  },
+  {
+   "channel_id": "0x097a294cb4c5462e94f292433def23e6a0535e05731cc780ee8b516767d1d00a",
+   "settle_tx": "0xd62ce5f1af0cbb1c3237b5907660acf4be83fa34b9e66847e534a749455876ee",
+   "settle_block": 3245287,
+   "gn": 120,
+   "miner_paid": "356400000000000002",
+   "selection": "random"
+  },
+  {
+   "channel_id": "0x0431c1e06f150179529117ce35c717bf66065f6ffde205aaf49f93bed8e9c8dd",
+   "settle_tx": "0x12e602fd7e8f8992600df1a6b26435772f2ff882d6ffe8ecf42ffdf22459fd74",
+   "settle_block": 3267292,
+   "gn": 21,
+   "miner_paid": "62370000000000002",
+   "selection": "random"
+  },
+  {
+   "channel_id": "0xfc196747a1a97be6ad16c265d0579df335cd0a5e5a3c1d5d045c24dbbe65b0ec",
+   "settle_tx": "0x4df3a0fd1da4f18ef9301ef1e7297b5b59eafd7ee0f772eac9572cac4adf5f3e",
+   "settle_block": 3280521,
+   "gn": 72,
+   "miner_paid": "213840000000000002",
+   "selection": "random"
+  }
+ ]
+}
